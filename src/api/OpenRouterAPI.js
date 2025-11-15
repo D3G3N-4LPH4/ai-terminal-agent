@@ -33,6 +33,13 @@ export class OpenRouterAPI {
         requestBody.tool_choice = options.tool_choice || "auto";
       }
 
+      // Add reasoning parameter if requested
+      if (options.includeReasoning) {
+        requestBody.reasoning = {
+          effort: options.reasoningEffort || "high"
+        };
+      }
+
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
@@ -64,7 +71,7 @@ export class OpenRouterAPI {
       if (options.includeReasoning) {
         return {
           content: message.content,
-          reasoning: data.reasoning || null,
+          reasoning: message.reasoning || null,  // Reasoning is in message.reasoning
           usage: data.usage
         };
       }
@@ -109,6 +116,13 @@ export class OpenRouterAPI {
         max_tokens: options.maxTokens || 2000,
       };
 
+      // Add reasoning parameter if requested
+      if (options.includeReasoning) {
+        requestBody.reasoning = {
+          effort: options.reasoningEffort || "high"
+        };
+      }
+
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
@@ -135,7 +149,7 @@ export class OpenRouterAPI {
       if (options.includeReasoning) {
         return {
           content: message.content,
-          reasoning: data.reasoning || null,
+          reasoning: message.reasoning || null,  // Reasoning is in message.reasoning
           model: webModel,
           usage: data.usage
         };
