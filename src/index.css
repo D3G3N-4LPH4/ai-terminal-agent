@@ -6,4 +6,73 @@ body {
   margin: 0;
   padding: 0;
   font-family: "Courier New", monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  /* Prevent zoom on input focus (iOS) */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+
+  /* Ensure full viewport height on mobile */
+  #root {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+
+  /* Prevent horizontal scroll */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Make terminal container responsive */
+  .terminal-container {
+    padding: 0.5rem !important;
+    font-size: 14px !important;
+  }
+
+  /* Adjust command input for mobile */
+  .command-input {
+    font-size: 16px !important;
+    padding: 0.75rem !important;
+  }
+
+  /* Make output text readable on mobile */
+  .output-item {
+    font-size: 13px !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* Adjust charts for mobile */
+  .recharts-wrapper {
+    max-width: 100% !important;
+  }
+
+  /* Make buttons touch-friendly */
+  button {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  /* Hide scrollbars but keep functionality */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .terminal-container {
+    padding: 1rem !important;
+    font-size: 15px !important;
+  }
 }

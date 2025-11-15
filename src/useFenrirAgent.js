@@ -14,7 +14,7 @@ export const useFenrirAgent = (config = {}) => {
   const threadIdRef = useRef(`thread_${Date.now()}`);
   const apiKeyRef = useRef(config.openRouterApiKey || "");
   const modelRef = useRef(config.model || "anthropic/claude-3.5-sonnet");
-  const baseUrl = 'http://localhost:3001';
+  const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
   // Update configuration
   const updateConfig = useCallback((newConfig) => {
