@@ -60,6 +60,15 @@ export class OpenRouterAPI {
         return message;
       }
 
+      // If reasoning is requested, return full response with reasoning
+      if (options.includeReasoning) {
+        return {
+          content: message.content,
+          reasoning: data.reasoning || null,
+          usage: data.usage
+        };
+      }
+
       // Otherwise return just the content
       return message.content;
     } catch (error) {
@@ -120,8 +129,21 @@ export class OpenRouterAPI {
       }
 
       const data = await response.json();
+      const message = data.choices[0].message;
+
+      // If reasoning is requested, return full response with reasoning
+      if (options.includeReasoning) {
+        return {
+          content: message.content,
+          reasoning: data.reasoning || null,
+          model: webModel,
+          usage: data.usage
+        };
+      }
+
+      // Otherwise return standard response
       return {
-        content: data.choices[0].message.content,
+        content: message.content,
         model: webModel,
         usage: data.usage
       };

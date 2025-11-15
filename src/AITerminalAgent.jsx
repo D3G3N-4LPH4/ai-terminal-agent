@@ -1932,7 +1932,17 @@ Be comprehensive but concise (max 400 words).`;
             });
 
             try {
-              const result = await openRouterAPI.current.webSearch(aiSearchQuery);
+              const result = await openRouterAPI.current.webSearch(aiSearchQuery, {
+                includeReasoning: true
+              });
+
+              // Display reasoning if available
+              if (result.reasoning) {
+                addOutput({
+                  type: "info",
+                  content: `ᛟ PERPLEXITY REASONING\n━━━━━━━━━━━━━━━━━━━━━━━━\n${result.reasoning}\n━━━━━━━━━━━━━━━━━━━━━━━━`,
+                });
+              }
 
               let output = `\nᚱ AI WEB SEARCH RESULTS\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
               output += `Query: ${aiSearchQuery}\n`;
@@ -2326,7 +2336,16 @@ Remember: You're not just an AI - you're Fenrir, unchained and ready to explore 
               let response = await openRouterAPI.current.chat(messages, {
                 tools: AVAILABLE_TOOLS,
                 tool_choice: "auto",
+                includeReasoning: true,
               });
+
+              // Display reasoning if available
+              if (response.reasoning) {
+                addOutput({
+                  type: "info",
+                  content: `ᛟ FENRIR'S REASONING\n━━━━━━━━━━━━━━━━━━━━━━━━\n${response.reasoning}\n━━━━━━━━━━━━━━━━━━━━━━━━`,
+                });
+              }
 
               // Handle tool calls (function calling loop)
               let maxIterations = 5; // Prevent infinite loops
@@ -2367,7 +2386,16 @@ Remember: You're not just an AI - you're Fenrir, unchained and ready to explore 
                 response = await openRouterAPI.current.chat(messages, {
                   tools: AVAILABLE_TOOLS,
                   tool_choice: "auto",
+                  includeReasoning: true,
                 });
+
+                // Display reasoning if available
+                if (response.reasoning) {
+                  addOutput({
+                    type: "info",
+                    content: `ᛟ FENRIR'S REASONING\n━━━━━━━━━━━━━━━━━━━━━━━━\n${response.reasoning}\n━━━━━━━━━━━━━━━━━━━━━━━━`,
+                  });
+                }
               }
 
               // Extract final response content
