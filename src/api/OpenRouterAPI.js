@@ -62,6 +62,16 @@ export class OpenRouterAPI {
       const data = await response.json();
       const message = data.choices[0].message;
 
+      // If both tools and reasoning are requested
+      if (options.tools && options.includeReasoning) {
+        return {
+          content: message.content,
+          reasoning: message.reasoning || null,
+          tool_calls: message.tool_calls || null,
+          usage: data.usage
+        };
+      }
+
       // Return the full message object if tools are used (includes tool_calls)
       if (options.tools && message.tool_calls) {
         return message;
