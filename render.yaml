@@ -19,7 +19,7 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
-      - key: VITE_API_URL
+      - key: VITE_BACKEND_URL
         fromService:
           type: web
           name: ai-terminal-backend

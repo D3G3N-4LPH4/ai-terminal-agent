@@ -53,7 +53,8 @@ const allowedOrigins = [
   'http://localhost:5178',
   'http://localhost:3000',
   // Add production URLs when deployed
-  process.env.FRONTEND_URL
+  process.env.FRONTEND_URL,
+  'https://ai-terminal-frontend.onrender.com'
 ].filter(Boolean);
 
 app.use(cors({
