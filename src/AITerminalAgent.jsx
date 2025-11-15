@@ -239,6 +239,7 @@ const COMMAND_SUGGESTIONS = [
     desc: "Scrape any website",
     category: "scraping",
   },
+  { cmd: "websearch-ai bitcoin ETF news", desc: "AI web search with citations", category: "scraping" },
   { cmd: "research bitcoin scaling", desc: "Deep AI research with citations", category: "scraping" },
   { cmd: "research https://example.com", desc: "Scrape & analyze URL", category: "scraping" },
   { cmd: "google bitcoin news", desc: "Google Search (results only)", category: "scraping" },
@@ -1056,12 +1057,11 @@ export default function AITerminalAgent() {
   categories [id]              - Explore themed sectors
   fear                         - Fear & Greed Index
 
-ᛉ WEB RESEARCH (Parallel AI)
-  research [topic]             - Deep AI research with citations
-  websearch [query]            - Fast web search results
-
-ᛉ WEB SEER (ScraperAPI)
-  scrape [url]                 - Extract knowledge from any realm
+ᛉ WEB RESEARCH
+  websearch-ai [query]         - AI-powered web search with citations (Perplexity)
+  research [topic]             - Deep AI research with citations (Parallel AI)
+  google [query]               - Google Search results (ScraperAPI)
+  scrape [url]                 - Extract and analyze any website
 
 ᛞ CHAIN CHRONICLES (Dune Analytics)
   dune query [id]              - Consult any oracle
@@ -1896,6 +1896,64 @@ Be comprehensive but concise (max 400 words).`;
                 content: `Failed to scrape URL: ${error.message}`,
               });
               showToast("Scraping failed", "error");
+            }
+            break;
+          }
+
+          case "websearch-ai":
+          case "ws-ai": {
+            if (args.length === 0) {
+              addOutput({
+                type: "error",
+                content:
+                  "ᛪ Usage: websearch-ai [query]\n\nAI-powered web search with automatic citations.\n\nExamples:\n• websearch-ai latest bitcoin developments\n• ws-ai ethereum scaling solutions 2024\n• websearch-ai solana network updates\n\nᚱ Uses Perplexity AI with real-time web access\nᛉ Results include citations and sources",
+              });
+              break;
+            }
+
+            if (
+              !API_CONFIG.openRouter.apiKey ||
+              API_CONFIG.openRouter.apiKey.trim() === ""
+            ) {
+              addOutput({
+                type: "error",
+                content:
+                  'ᛪ OpenRouter API key not configured.\n\nRun "apikeys" to set up your OpenRouter key.\nGet your key at: https://openrouter.ai',
+              });
+              showToast("OpenRouter key required", "error");
+              break;
+            }
+
+            const aiSearchQuery = args.join(" ");
+
+            addOutput({
+              type: "info",
+              content: `ᚱ AI Web Search: "${aiSearchQuery}"\n\nᛋ Searching the web with Perplexity AI...`,
+            });
+
+            try {
+              const result = await openRouterAPI.current.webSearch(aiSearchQuery);
+
+              let output = `\nᚱ AI WEB SEARCH RESULTS\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+              output += `Query: ${aiSearchQuery}\n`;
+              output += `Model: ${result.model.split('/').pop()}\n\n`;
+              output += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+              output += result.content;
+              output += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+              output += `ᛟ Powered by OpenRouter + Perplexity AI`;
+
+              if (result.usage) {
+                output += `\nᛏ Tokens: ${result.usage.total_tokens || 'N/A'}`;
+              }
+
+              addOutput({ type: "success", content: output });
+              showToast("AI search complete", "success");
+            } catch (error) {
+              addOutput({
+                type: "error",
+                content: `ᛪ AI web search failed: ${error.message}`,
+              });
+              showToast("AI search failed", "error");
             }
             break;
           }

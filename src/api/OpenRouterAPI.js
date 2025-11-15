@@ -75,6 +75,62 @@ export class OpenRouterAPI {
     }
   }
 
+  async webSearch(query, options = {}) {
+    if (!this.apiKey) {
+      throw new Error(
+        "OpenRouter API key not configured. Use 'apikeys' command to set it up."
+      );
+    }
+
+    try {
+      // Use Perplexity's online model for web search
+      const webModel = options.model || "perplexity/llama-3.1-sonar-large-128k-online";
+
+      const messages = [
+        {
+          role: "user",
+          content: query
+        }
+      ];
+
+      const requestBody = {
+        model: webModel,
+        messages: messages,
+        temperature: options.temperature || 0.3, // Lower temp for factual responses
+        max_tokens: options.maxTokens || 2000,
+      };
+
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": window.location.href,
+          "X-Title": "Fenrir AI Terminal",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error?.message ||
+            `OpenRouter API error: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      return {
+        content: data.choices[0].message.content,
+        model: webModel,
+        usage: data.usage
+      };
+    } catch (error) {
+      console.error("OpenRouter web search error:", error);
+      throw error;
+    }
+  }
+
   async listModels() {
     try {
       const response = await fetch(`${this.baseUrl}/models`, {
