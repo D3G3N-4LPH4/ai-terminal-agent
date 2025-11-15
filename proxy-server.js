@@ -472,7 +472,16 @@ app.post('/api/agent/query', async (req, res) => {
         userId: config.userId
       });
 
-      res.json(result);
+      // Format response for frontend
+      const response = {
+        finalResponse: result?.finalResponse || result?.messages?.at(-1)?.content || "No response generated",
+        reasoningSteps: result?.reasoningSteps || [],
+        messageCount: result?.messages?.length || 0,
+        userPreferences: result?.userPreferences || {},
+        timestamp: new Date().toISOString()
+      };
+
+      res.json(response);
     }
   } catch (error) {
     console.error('Agent error:', error);
