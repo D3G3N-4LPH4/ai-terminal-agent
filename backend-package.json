@@ -1,0 +1,35 @@
+{
+  "name": "ai-terminal-backend",
+  "version": "1.0.0",
+  "description": "Backend proxy server for AI Terminal Agent - Solves CORS issues",
+  "main": "proxy-server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node proxy-server.js",
+    "dev": "nodemon proxy-server.js",
+    "test": "node proxy-server.js"
+  },
+  "keywords": [
+    "proxy",
+    "api",
+    "cors",
+    "coinmarketcap",
+    "helius",
+    "dune",
+    "solana"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.7.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

@@ -1,0 +1,119 @@
+// API_CONFIG should be imported or defined in consuming code
+const getAPIConfig = () => {
+  if (typeof window !== 'undefined' && window.API_CONFIG) {
+    return window.API_CONFIG;
+  }
+  // Fallback for server-side usage
+  return {
+    parallel: {
+      baseUrl: process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001'
+    }
+  };
+};
+
+class ParallelAPI {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+    const apiConfig = getAPIConfig();
+    this.baseUrl = apiConfig.parallel.baseUrl;
+  }
+
+  async search(objective, queries = [], maxResults = 10) {
+    if (!this.apiKey || this.apiKey.trim() === "") {
+      throw new Error(
+        "Parallel AI API key not configured. Use 'apikeys' command to set it up."
+      );
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+        },
+        body: JSON.stringify({
+          objective: objective,
+          queries: queries,
+          max_results: maxResults,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Parallel Search API error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Parallel Search error:", error);
+      throw error;
+    }
+  }
+
+  async task(objective, processor = "base") {
+    if (!this.apiKey || this.apiKey.trim() === "") {
+      throw new Error(
+        "Parallel AI API key not configured. Use 'apikeys' command to set it up."
+      );
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/task`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+        },
+        body: JSON.stringify({
+          objective: objective,
+          processor: processor,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Parallel Task API error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Parallel Task error:", error);
+      throw error;
+    }
+  }
+
+  async extract(urls, objective) {
+    if (!this.apiKey || this.apiKey.trim() === "") {
+      throw new Error(
+        "Parallel AI API key not configured. Use 'apikeys' command to set it up."
+      );
+    }
+
+    try {
+      const urlsArray = Array.isArray(urls) ? urls : [urls];
+
+      const response = await fetch(`${this.baseUrl}/extract`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+        },
+        body: JSON.stringify({
+          urls: urlsArray,
+          objective: objective,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Parallel Extract API error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Parallel Extract error:", error);
+      throw error;
+    }
+  }
+}
+
+export { ParallelAPI };
+export default ParallelAPI;

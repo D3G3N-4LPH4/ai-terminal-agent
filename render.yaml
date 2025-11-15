@@ -1,0 +1,26 @@
+services:
+  # Backend API Server
+  - type: web
+    name: ai-terminal-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node proxy-server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+    healthCheckPath: /health
+
+  # Frontend Static Site
+  - type: web
+    name: ai-terminal-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: ai-terminal-backend
+          envVarKey: RENDER_EXTERNAL_URL

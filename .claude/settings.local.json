@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node proxy-server.js:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(timeout:*)",
+      "Bash(nul)",
+      "Bash(dir /b \"c:\\Users\\pmorr\\OneDrive\\Desktop\\ai-terminal-agent\\src\")",
+      "Bash(dir \"c:\\Users\\pmorr\\OneDrive\\Desktop\\ai-terminal-agent\\src\")",
+      "Bash(dir:*)",
+      "Bash(python cleanup_extracted_code.py:*)",
+      "Bash(npm run frontend:*)",
+      "Bash(python:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(where:*)",
+      "Bash(ping:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(.cloudflared.exe tunnel --url http://localhost:5173)",
+      "Bash(./cloudflared.exe tunnel:*)",
+      "Bash(cloudflared.exe tunnel:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(del nul)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
