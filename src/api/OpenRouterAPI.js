@@ -77,6 +77,15 @@ export class OpenRouterAPI {
         return message;
       }
 
+      // If tools are enabled but not used, return structure with null tool_calls
+      if (options.tools) {
+        return {
+          content: message.content,
+          tool_calls: null,
+          usage: data.usage
+        };
+      }
+
       // If reasoning is requested, return full response with reasoning
       if (options.includeReasoning) {
         return {
