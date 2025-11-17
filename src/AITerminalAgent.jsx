@@ -59,6 +59,10 @@ import {
   formatPercent,
   getChangeRune,
 } from "./utils/formatters";
+import { getCoinIdOrError } from "./utils/coinValidation";
+import { handleCommandError } from "./utils/errorHandler";
+import { getLoadingMessage, OperationType } from "./utils/loadingMessages";
+import { validateTrainingData, validatePredictionInput, calculateConfidence } from "./utils/mlValidation";
 import MLCacheHelper from "./utils/mlCacheHelper";
 import MultiTimeframeAnalyzer from "./utils/multiTimeframeAnalysis";
 import AlertManager from "./utils/alertSystem";
@@ -1144,22 +1148,23 @@ export default function AITerminalAgent() {
               break;
             }
 
-            const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
-
-            if (!coinId) {
+            // Use coinValidation utility
+            const validation = getCoinIdOrError(args[0], COIN_ID_MAP);
+            if (!validation.valid) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(
-                  COIN_ID_MAP
-                ).join(", ")}`,
+                content: validation.error,
               });
               break;
             }
 
+            const symbol = args[0].toUpperCase();
+            const coinId = validation.coinId;
+
+            // Use improved loading message
             addOutput({
               type: "info",
-              content: `ᛉ Seeking the value of ${symbol} across the realms...`,
+              content: getLoadingMessage(OperationType.FETCH_PRICE, { asset: symbol }),
             });
 
             try {
@@ -1184,10 +1189,7 @@ export default function AITerminalAgent() {
               addOutput({ type: "success", content: result });
               showToast(`${symbol}: ${priceFormatted} ᛗ`, "success");
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ The runes fail to reveal ${symbol}: ${error.message}`,
-              });
+              handleCommandError(error, `price ${symbol}`, addOutput);
               showToast("Price fetch failed ᛪ", "error");
             }
             break;
@@ -2487,12 +2489,28 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 const marketData = await coinGeckoAPI.current.getMarketChart(coinId, 90);
                 prices = marketData.prices.map(p => p[1]);
 
-                if (prices.length < 30) {
+                // Validate training data
+                const validation = validateTrainingData(prices, 30);
+                if (!validation.valid) {
                   addOutput({
                     type: "error",
-                    content: "ᛪ Insufficient historical data for prediction",
+                    content: `ᛪ Data validation failed:\n${validation.errors.join('\n')}`,
                   });
+                  if (validation.warnings.length > 0) {
+                    addOutput({
+                      type: "info",
+                      content: `ᛋ Warnings:\n${validation.warnings.join('\n')}`,
+                    });
+                  }
                   break;
+                }
+
+                // Show warnings if any
+                if (validation.warnings.length > 0) {
+                  addOutput({
+                    type: "info",
+                    content: `ᛋ ${validation.warnings.join('\n')}`,
+                  });
                 }
 
                 // Train model with progress updates

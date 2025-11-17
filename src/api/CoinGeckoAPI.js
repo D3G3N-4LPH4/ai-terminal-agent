@@ -1,5 +1,9 @@
 // CoinGecko API Client (free tier + Pro tier support)
 
+import { fetchWithTimeout, fetchJSON } from '../utils/fetchWithTimeout.js';
+import { caches, cachedAPICall } from '../utils/requestCache.js';
+import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
+
 export class CoinGeckoAPI {
   constructor(apiKey = "", baseUrl, proBaseUrl) {
     this.apiKey = apiKey;
@@ -17,38 +21,43 @@ export class CoinGeckoAPI {
   }
 
   async getPrice(coinIds, vsCurrencies = ["usd"]) {
-    try {
-      const ids = Array.isArray(coinIds) ? coinIds.join(",") : coinIds;
-      const currencies = Array.isArray(vsCurrencies)
-        ? vsCurrencies.join(",")
-        : vsCurrencies;
+    const ids = Array.isArray(coinIds) ? coinIds.join(",") : coinIds;
+    const currencies = Array.isArray(vsCurrencies)
+      ? vsCurrencies.join(",")
+      : vsCurrencies;
 
-      const response = await fetch(
-        `${this.baseUrl}/simple/price?ids=${ids}&vs_currencies=${currencies}&include_24hr_change=true&include_24hr_vol=true`,
-        { headers: this.getHeaders() }
-      );
+    // Use cache for price data (30s TTL)
+    return cachedAPICall(
+      caches.price,
+      'coingecko_price',
+      async () => {
+        try {
+          const url = `${this.baseUrl}/simple/price?ids=${ids}&vs_currencies=${currencies}&include_24hr_change=true&include_24hr_vol=true`;
+          const response = await fetchWithTimeout(url, { headers: this.getHeaders() }, 10000);
 
-      if (!response.ok) {
-        // If Pro API fails, try falling back to free API
-        if (this.apiKey && this.baseUrl === this.proBaseUrl) {
-          console.warn("CoinGecko Pro API failed, falling back to free tier");
-          const freeResponse = await fetch(
-            `${this.freeBaseUrl}/simple/price?ids=${ids}&vs_currencies=${currencies}&include_24hr_change=true&include_24hr_vol=true`
-          );
+          if (!response.ok) {
+            // If Pro API fails, try falling back to free API
+            if (this.apiKey && this.baseUrl === this.proBaseUrl) {
+              console.warn("CoinGecko Pro API failed, falling back to free tier");
+              const freeUrl = `${this.freeBaseUrl}/simple/price?ids=${ids}&vs_currencies=${currencies}&include_24hr_change=true&include_24hr_vol=true`;
+              const freeResponse = await fetchWithTimeout(freeUrl, {}, 10000);
 
-          if (freeResponse.ok) {
-            return await freeResponse.json();
+              if (freeResponse.ok) {
+                return await freeResponse.json();
+              }
+            }
+
+            await validateAPIResponse(response, 'CoinGecko');
           }
+
+          return await response.json();
+        } catch (error) {
+          console.error("CoinGecko price error:", error);
+          throw error;
         }
-
-        throw new Error(`CoinGecko API error: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("CoinGecko error:", error);
-      throw error;
-    }
+      },
+      { ids, currencies }
+    );
   }
 
   async getMarketData(coinId) {
@@ -70,21 +79,27 @@ export class CoinGeckoAPI {
   }
 
   async getTrending() {
-    try {
-      const response = await fetch(
-        `${this.baseUrl}/search/trending`,
-        { headers: this.getHeaders() }
-      );
+    // Use cache for trending data (2min TTL)
+    return cachedAPICall(
+      caches.trending,
+      'coingecko_trending',
+      async () => {
+        try {
+          const url = `${this.baseUrl}/search/trending`;
+          const response = await fetchWithTimeout(url, { headers: this.getHeaders() }, 10000);
 
-      if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.statusText}`);
-      }
+          if (!response.ok) {
+            await validateAPIResponse(response, 'CoinGecko');
+          }
 
-      return await response.json();
-    } catch (error) {
-      console.error("CoinGecko trending error:", error);
-      throw error;
-    }
+          return await response.json();
+        } catch (error) {
+          console.error("CoinGecko trending error:", error);
+          throw error;
+        }
+      },
+      {}
+    );
   }
 
   async getTopGainersLosers() {
@@ -172,51 +187,62 @@ export class CoinGeckoAPI {
   }
 
   async getGlobalData() {
-    try {
-      const response = await fetch(
-        `${this.baseUrl}/global`,
-        { headers: this.getHeaders() }
-      );
+    // Use cache for global market data (1min TTL)
+    return cachedAPICall(
+      caches.market,
+      'coingecko_global',
+      async () => {
+        try {
+          const url = `${this.baseUrl}/global`;
+          const response = await fetchWithTimeout(url, { headers: this.getHeaders() }, 10000);
 
-      if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.statusText}`);
-      }
+          if (!response.ok) {
+            await validateAPIResponse(response, 'CoinGecko');
+          }
 
-      return await response.json();
-    } catch (error) {
-      console.error("CoinGecko global data error:", error);
-      throw error;
-    }
+          return await response.json();
+        } catch (error) {
+          console.error("CoinGecko global data error:", error);
+          throw error;
+        }
+      },
+      {}
+    );
   }
 
   async getMarketChart(coinId, days = 30) {
-    try {
-      const response = await fetch(
-        `${this.baseUrl}/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`,
-        { headers: this.getHeaders() }
-      );
+    // Use cache for historical data (5min TTL)
+    return cachedAPICall(
+      caches.historical,
+      'coingecko_chart',
+      async () => {
+        try {
+          const url = `${this.baseUrl}/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
+          const response = await fetchWithTimeout(url, { headers: this.getHeaders() }, 15000);
 
-      if (!response.ok) {
-        // If Pro API fails, try falling back to free API
-        if (this.apiKey && this.baseUrl === this.proBaseUrl) {
-          console.warn("CoinGecko Pro API failed, falling back to free tier");
-          const freeResponse = await fetch(
-            `${this.freeBaseUrl}/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`
-          );
+          if (!response.ok) {
+            // If Pro API fails, try falling back to free API
+            if (this.apiKey && this.baseUrl === this.proBaseUrl) {
+              console.warn("CoinGecko Pro API failed, falling back to free tier");
+              const freeUrl = `${this.freeBaseUrl}/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
+              const freeResponse = await fetchWithTimeout(freeUrl, {}, 15000);
 
-          if (freeResponse.ok) {
-            return await freeResponse.json();
+              if (freeResponse.ok) {
+                return await freeResponse.json();
+              }
+            }
+
+            await validateAPIResponse(response, 'CoinGecko');
           }
+
+          return await response.json();
+        } catch (error) {
+          console.error("CoinGecko market chart error:", error);
+          throw error;
         }
-
-        throw new Error(`CoinGecko API error: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("CoinGecko market chart error:", error);
-      throw error;
-    }
+      },
+      { coinId, days }
+    );
   }
 
   async getHistoricalPrices(coinId, days = 30) {
