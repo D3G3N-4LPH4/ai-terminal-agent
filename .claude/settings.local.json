@@ -28,7 +28,8 @@
       "Bash(git remote:*)",
       "Bash(git push:*)",
       "Bash(del \"c:\\Users\\pmorr\\OneDrive\\Desktop\\ai-terminal-agent\\src\\api\\DuneAPI.js\")",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
