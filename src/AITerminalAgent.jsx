@@ -38,12 +38,10 @@ import { useFenrirAgent } from "./useFenrirAgent";
 
 // Import API classes
 import {
-  DuneAPI,
   OpenRouterAPI,
   CoinGeckoAPI,
   WebScraperAPI,
   ScraperAPI,
-  HeliusAPI,
   CoinMarketCapAPI,
   SantimentAPI,
   ParallelAPI,
@@ -99,20 +97,18 @@ import {
  * AITerminalAgent_INTEGRATED.jsx - Full API Integration Edition
  *
  * 🔌 INTEGRATIONS:
- * - Dune Analytics API for blockchain data
  * - OpenRouter API for real AI responses
  * - Web scraping for market data
  * - Real-time crypto price feeds
  *
  * ᛟ FEATURES:
- * - Real blockchain analytics via Dune
  * - Multi-model AI chat via OpenRouter
  * - API key management UI
  * - Rate limiting and error handling
  * - Caching and optimization
  *
  * 🎨 UX:
- * - Dropdown theme selector
+ * - Theme selector
  * - Command history
  * - Autocomplete
  * - Toast notifications
@@ -125,12 +121,6 @@ import {
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
 
 const API_CONFIG = {
-  dune: {
-    // Using backend proxy to avoid CORS issues
-    baseUrl: `${BACKEND_URL}/api/dune`,
-    // Direct API (will fail due to CORS): "https://api.dune.com/api/v1"
-    apiKey: localStorage.getItem("dune_api_key") || "",
-  },
   openRouter: {
     baseUrl: "https://openrouter.ai/api/v1",
     // OpenRouter supports CORS, no proxy needed
@@ -179,13 +169,6 @@ const API_CONFIG = {
     // Pro MCP: "https://mcp.pro-api.coingecko.com/mcp"
     apiKey: localStorage.getItem("coingecko_api_key") || "", // Optional - for Pro tier
   },
-  helius: {
-    // Using backend proxy to avoid CORS issues
-    baseUrl: `${BACKEND_URL}/api/helius`,
-    rpcUrl: `${BACKEND_URL}/api/helius/rpc`,
-    // Direct API (will fail due to CORS): "https://api.helius.xyz/v0"
-    apiKey: localStorage.getItem("helius_api_key") || "",
-  },
   coinMarketCap: {
     // Using backend proxy to avoid CORS issues
     baseUrl: `${BACKEND_URL}/api/cmc`,
@@ -211,10 +194,6 @@ const API_CONFIG = {
 if (typeof window !== 'undefined') {
   window.API_CONFIG = API_CONFIG;
 }
-
-// ==================== DUNE ANALYTICS ====================
-// Dune queries can be run directly by their numeric ID
-// Find query IDs at: https://dune.com/browse/queries
 
 // ==================== THEMES (Same as before) ====================
 
@@ -244,26 +223,6 @@ const COMMAND_SUGGESTIONS = [
   { cmd: "research https://example.com", desc: "Scrape & analyze URL", category: "scraping" },
   { cmd: "google bitcoin news", desc: "Google Search (results only)", category: "scraping" },
   { cmd: "gecko trending DEX tokens", desc: "CoinGecko MCP AI query", category: "trading" },
-  { cmd: "dune query 123456", desc: "Run any Dune query", category: "dune" },
-  { cmd: "dune list", desc: "List configured queries", category: "dune" },
-  { cmd: "dune gas", desc: "Ethereum gas prices", category: "dune" },
-  { cmd: "dune tvl", desc: "DeFi total value locked", category: "dune" },
-  { cmd: "dune nft", desc: "NFT market data", category: "dune" },
-  { cmd: "dune whales", desc: "Whale movements", category: "dune" },
-  { cmd: "dune uniswap", desc: "Uniswap volume", category: "dune" },
-  { cmd: "sol balance <address>", desc: "Get SOL balance", category: "solana" },
-  { cmd: "sol nfts <address>", desc: "Get wallet NFTs", category: "solana" },
-  {
-    cmd: "sol tokens <address>",
-    desc: "Get token holdings",
-    category: "solana",
-  },
-  { cmd: "sol tx <signature>", desc: "Parse transaction", category: "solana" },
-  {
-    cmd: "sol history <address>",
-    desc: "Transaction history",
-    category: "solana",
-  },
   { cmd: "cmc price BTC", desc: "CMC price data", category: "cmc" },
   { cmd: "cmc top 10", desc: "Top cryptocurrencies", category: "cmc" },
   { cmd: "cmc trending", desc: "Trending coins", category: "cmc" },
@@ -354,13 +313,11 @@ export default function AITerminalAgent() {
 
   const terminalRef = useRef(null);
   const inputRef = useRef(null);
-  const duneAPI = useRef(null);
   const openRouterAPI = useRef(null);
   const coinGeckoAPI = useRef(null);
   const coinGeckoMCP = useRef(null);
   const scraperAPI = useRef(null);
   const scraperAPIAdvanced = useRef(null);
-  const heliusAPI = useRef(null);
   const coinMarketCapAPI = useRef(null);
   const santimentAPI = useRef(null);
   const parallelAPI = useRef(null);
@@ -386,7 +343,6 @@ export default function AITerminalAgent() {
 
   // Initialize APIs
   useEffect(() => {
-    duneAPI.current = new DuneAPI(API_CONFIG.dune.apiKey, API_CONFIG.dune.baseUrl);
     openRouterAPI.current = new OpenRouterAPI(
       API_CONFIG.openRouter.apiKey,
       API_CONFIG.openRouter.baseUrl,
@@ -394,7 +350,6 @@ export default function AITerminalAgent() {
     );
     scraperAPI.current = new WebScraperAPI();
     scraperAPIAdvanced.current = new ScraperAPI(API_CONFIG.scraperAPI.apiKey);
-    heliusAPI.current = new HeliusAPI(API_CONFIG.helius.apiKey);
     coinMarketCapAPI.current = new CoinMarketCapAPI(API_CONFIG.coinMarketCap.apiKey);
     santimentAPI.current = new SantimentAPI(API_CONFIG.santiment.apiKey);
     coinGeckoAPI.current = new CoinGeckoAPI(
@@ -889,8 +844,7 @@ export default function AITerminalAgent() {
 
   // Handler to reinitialize API instances when keys are updated
   const handleAPIKeysSaved = useCallback(
-    (duneKey, openRouterKey, scraperKey, heliusKey, cmcKey, santimentKey, coinGeckoKey, parallelKey) => {
-      duneAPI.current = new DuneAPI(duneKey, API_CONFIG.dune.baseUrl);
+    (openRouterKey, scraperKey, cmcKey, santimentKey, coinGeckoKey, parallelKey) => {
       openRouterAPI.current = new OpenRouterAPI(
         openRouterKey,
         API_CONFIG.openRouter.baseUrl,
@@ -898,7 +852,6 @@ export default function AITerminalAgent() {
       );
       scraperAPI.current = new WebScraperAPI();
       scraperAPIAdvanced.current = new ScraperAPI(scraperKey);
-      heliusAPI.current = new HeliusAPI(heliusKey);
       coinMarketCapAPI.current = new CoinMarketCapAPI(cmcKey);
       santimentAPI.current = new SantimentAPI(santimentKey);
       coinGeckoAPI.current = new CoinGeckoAPI(
@@ -1063,21 +1016,6 @@ export default function AITerminalAgent() {
   google [query]               - Google Search results (ScraperAPI)
   scrape [url]                 - Extract and analyze any website
 
-ᛞ CHAIN CHRONICLES (Dune Analytics)
-  dune query [id]              - Consult any oracle
-  dune list                    - Browse the grimoire
-  dune gas, tvl, nft, whales   - Ancient shortcuts
-  dune uniswap, opensea, aave  - DeFi wisdom
-  dune bridge, l2, mev         - Advanced runes
-
-ᛋ SOLANA REALM (Helius API)
-  sol balance [address]        - Check treasury
-  sol tokens [address]         - List token hoard
-  sol nfts [address]           - View artifact gallery
-  sol tx [signature]           - Decode transaction scroll
-  sol history [address]        - Read the chronicles
-  sol assets [address]         - Complete inventory
-
 ᚦ COINMARKETCAP VAULT (Premium Data)
   cmc price [symbol]           - Detailed market intel
   cmc top [limit]              - Mightiest assets
@@ -1149,9 +1087,7 @@ export default function AITerminalAgent() {
           }
 
           case "status": {
-            const duneConfigured = !!API_CONFIG.dune.apiKey;
             const openRouterConfigured = !!API_CONFIG.openRouter.apiKey;
-            const heliusConfigured = !!API_CONFIG.helius.apiKey;
             const scraperConfigured = !!API_CONFIG.scraperAPI.apiKey;
             const cmcConfigured = !!API_CONFIG.coinMarketCap.apiKey;
             const santimentConfigured = !!API_CONFIG.santiment.apiKey;
@@ -1159,14 +1095,8 @@ export default function AITerminalAgent() {
             const parallelConfigured = !!API_CONFIG.parallel.apiKey;
 
             let statusMsg = "\nᛗ ARSENAL STATUS\n━━━━━━━━━━━━━━━━━━━━━━━━\n";
-            statusMsg += `Dune Analytics:  ${
-              duneConfigured ? "ᛏ Ready" : "ᛪ Not inscribed"
-            }\n`;
             statusMsg += `OpenRouter AI:   ${
               openRouterConfigured ? "ᛏ Ready" : "ᛪ Not inscribed"
-            }\n`;
-            statusMsg += `Helius (Solana): ${
-              heliusConfigured ? "ᛏ Ready" : "ᛪ Not inscribed"
             }\n`;
             statusMsg += `CoinMarketCap:   ${
               cmcConfigured ? "ᛏ Ready" : "ᛪ Not inscribed"
@@ -1186,9 +1116,7 @@ export default function AITerminalAgent() {
             statusMsg += `\nCurrent Spirit: ${currentAIModel}\n`;
 
             if (
-              !duneConfigured ||
               !openRouterConfigured ||
-              !heliusConfigured ||
               !scraperConfigured ||
               !cmcConfigured ||
               !santimentConfigured ||
@@ -2118,139 +2046,6 @@ Be comprehensive but concise (max 400 words).`;
                 content: `Failed to query CoinGecko MCP: ${error.message}\n\nᛉ Tip: CoinGecko MCP is currently in beta. Try simpler queries or use traditional commands like 'price BTC' or 'trending'.`,
               });
               showToast("CoinGecko MCP query failed", "error");
-            }
-            break;
-          }
-
-          case "dune": {
-            if (args.length === 0) {
-              addOutput({
-                type: "error",
-                content:
-                  "ᛪ Usage: dune [command]\n\nᛗ Quick Commands:\n  dune help       - Show all available queries\n  dune [name]     - Run a pre-configured query\n  dune [id]       - Run any query by ID number\n\nᚱ Popular Queries:\n  gas             - Ethereum gas prices\n  nft             - NFT sales activity  \n  whales          - Whale movements\n  uniswap         - Uniswap volume\n  tvl             - DeFi total value locked\n\nᛉ Examples:\n  dune gas        - Check current gas prices\n  dune 123456     - Run query ID 123456\n  dune help       - See all available queries",
-              });
-              break;
-            }
-
-            const duneCommand = args[0].toLowerCase();
-
-            if (
-              !API_CONFIG.dune.apiKey ||
-              API_CONFIG.dune.apiKey.trim() === ""
-            ) {
-              addOutput({
-                type: "error",
-                content:
-                  'ᛪ Dune Analytics key missing from the grimoire.\n\nRun "apikeys" to inscribe your Dune Analytics API key.\nAcquire your key at: https://dune.com/settings/api',
-              });
-              showToast("Dune API key required ᛪ", "error");
-              break;
-            }
-
-            try {
-              // Handle help/list command
-              if (duneCommand === "help" || duneCommand === "list") {
-                let result = `\nᛞ DUNE ANALYTICS ─ USAGE\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-                result += `ᛉ USAGE:\n`;
-                result += `  dune [query_id]          - Execute any Dune query by ID\n\n`;
-
-                result += `ᛉ EXAMPLES:\n`;
-                result += `  dune 123456              - Run query ID 123456\n`;
-                result += `  dune 3915747             - Popular Ethereum metrics\n`;
-                result += `  dune 4040077             - NFT marketplace data\n\n`;
-
-                result += `ᛉ FIND QUERIES:\n`;
-                result += `  Browse queries at: https://dune.com/browse/queries\n`;
-                result += `  Search for topics like "gas", "NFT", "DEX volume"\n`;
-                result += `  Copy the numeric query ID from the URL\n\n`;
-
-                result += `ᛗ All Dune queries supported - just use the query ID`;
-
-                addOutput({ type: "success", content: result });
-                break;
-              }
-
-              // Check if user entered a numeric query ID directly
-              const directQueryId = parseInt(duneCommand);
-              if (!isNaN(directQueryId)) {
-                addOutput({
-                  type: "info",
-                  content: `ᛉ Executing query ${directQueryId}...\nPatience, traveler... (10-30 seconds)`,
-                });
-
-                const results = await duneAPI.current.queryAndWait(
-                  directQueryId
-                );
-
-                // Simplified, cleaner output
-                let output = `\nᛞ QUERY ${directQueryId} RESULTS\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-                if (results.result && results.result.rows) {
-                  const rows = results.result.rows;
-                  const totalRows = rows.length;
-
-                  if (totalRows === 0) {
-                    output += `The oracle returns empty handed.\n`;
-                  } else {
-                    output += `ᚱ Found ${totalRows} result${
-                      totalRows === 1 ? "" : "s"
-                    }\n\n`;
-
-                    // Show first 10 rows in compact format
-                    const displayRows = rows.slice(0, 10);
-                    displayRows.forEach((row, idx) => {
-                      output += `${idx + 1}. `;
-                      const entries = Object.entries(row);
-
-                      // Show first 3 most important fields
-                      entries.slice(0, 3).forEach(([key, value], i) => {
-                        let formattedValue = value;
-                        if (typeof value === "number") {
-                          if (value > 1000000) {
-                            formattedValue = value.toLocaleString(undefined, {
-                              maximumFractionDigits: 2,
-                            });
-                          } else if (value % 1 !== 0) {
-                            formattedValue = value.toFixed(4);
-                          } else {
-                            formattedValue = value.toLocaleString();
-                          }
-                        }
-                        output +=
-                          i > 0
-                            ? ` | ${key}: ${formattedValue}`
-                            : `${key}: ${formattedValue}`;
-                      });
-                      output += `\n`;
-                    });
-
-                    if (totalRows > 10) {
-                      output += `\n... and ${totalRows - 10} more results`;
-                    }
-                  }
-                } else {
-                  output += `The oracle remains silent.\n`;
-                }
-
-                output += `\n\nᛗ Query ID: ${directQueryId}`;
-                addOutput({ type: "success", content: output });
-                showToast(`Query complete ᛗ`, "success");
-                break;
-              }
-
-              // Unknown dune command - only query IDs are supported
-              addOutput({
-                type: "error",
-                content: `ᛪ Unknown command: "${duneCommand}"\n\nᛉ Usage:\n  dune help        - Show usage instructions\n  dune [query_id]  - Run any query by numeric ID\n\nᛉ Example:\n  dune 3915747     - Execute query ID 3915747\n\nᚱ Find queries at: https://dune.com/browse/queries`,
-              });
-            } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ Dune query failed: ${error.message}`,
-              });
-              console.error("Dune error:", error);
-              showToast("Query failed ᛪ", "error");
             }
             break;
           }
@@ -3827,343 +3622,6 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             break;
           }
 
-          case "sol": {
-            if (args.length === 0) {
-              addOutput({
-                type: "error",
-                content:
-                  "ᛪ Usage: sol [command] [args]\nCommands: balance, tokens, nfts, tx, history, assets\nExample: sol balance <address>",
-              });
-              break;
-            }
-
-            const solCommand = args[0].toLowerCase();
-            const solArgs = args.slice(1);
-
-            if (
-              !API_CONFIG.helius.apiKey ||
-              API_CONFIG.helius.apiKey.trim() === ""
-            ) {
-              addOutput({
-                type: "error",
-                content:
-                  'ᛪ Helius key missing from your arsenal, warrior.\n\nRun "apikeys" to configure your Helius API key.\nObtain your key at: https://dashboard.helius.dev',
-              });
-              showToast("Helius API key required ᛪ", "error");
-              break;
-            }
-
-            try {
-              switch (solCommand) {
-                case "balance": {
-                  if (solArgs.length === 0) {
-                    addOutput({
-                      type: "error",
-                      content:
-                        "ᛪ Usage: sol balance [address]\nExample: sol balance 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-                    });
-                    break;
-                  }
-
-                  const address = solArgs[0];
-                  addOutput({
-                    type: "info",
-                    content: `ᛉ Consulting the Solana ledger for ${address.substring(
-                      0,
-                      8
-                    )}...`,
-                  });
-
-                  const balance = await heliusAPI.current.getBalance(address);
-
-                  let result = `\nᛋ SOLANA TREASURY\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-                  result += `Address: ${address.substring(
-                    0,
-                    8
-                  )}...${address.substring(address.length - 8)}\n`;
-                  result += `Balance: ${balance.toFixed(4)} SOL\n`;
-                  result += `USD Value: $${(balance * 100).toFixed(
-                    2
-                  )} (approx)\n`;
-                  result += `\nᛗ The blockchain remembers all`;
-
-                  addOutput({ type: "success", content: result });
-                  showToast(`${balance.toFixed(4)} SOL ᛗ`, "success");
-                  break;
-                }
-
-                case "tokens": {
-                  if (solArgs.length === 0) {
-                    addOutput({
-                      type: "error",
-                      content:
-                        "ᛪ Usage: sol tokens [address]\nExample: sol tokens 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-                    });
-                    break;
-                  }
-
-                  const address = solArgs[0];
-                  addOutput({
-                    type: "info",
-                    content: `ᛉ Gathering token holdings from ${address.substring(
-                      0,
-                      8
-                    )}...`,
-                  });
-
-                  const tokenAccounts =
-                    await heliusAPI.current.getTokenAccounts(address);
-
-                  let result = `\nᚦ TOKEN HOARD\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-                  result += `Address: ${address.substring(
-                    0,
-                    8
-                  )}...${address.substring(address.length - 8)}\n\n`;
-
-                  if (tokenAccounts.length === 0) {
-                    result += `The vault stands empty.\n`;
-                  } else {
-                    tokenAccounts.slice(0, 10).forEach((account, idx) => {
-                      const tokenInfo =
-                        account.account.data.parsed.info.tokenAmount;
-                      result += `${idx + 1}. Amount: ${
-                        tokenInfo.uiAmount || 0
-                      }\n`;
-                      result += `   Mint: ${account.account.data.parsed.info.mint.substring(
-                        0,
-                        16
-                      )}...\n`;
-                      result += `   Decimals: ${tokenInfo.decimals}\n\n`;
-                    });
-
-                    if (tokenAccounts.length > 10) {
-                      result += `... and ${
-                        tokenAccounts.length - 10
-                      } more treasures\n`;
-                    }
-                  }
-
-                  result += `\nᛗ ${tokenAccounts.length} tokens discovered`;
-                  addOutput({ type: "success", content: result });
-                  showToast(
-                    `${tokenAccounts.length} tokens found ᛗ`,
-                    "success"
-                  );
-                  break;
-                }
-
-                case "nfts": {
-                  if (solArgs.length === 0) {
-                    addOutput({
-                      type: "error",
-                      content:
-                        "ᛪ Usage: sol nfts [address]\nExample: sol nfts 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-                    });
-                    break;
-                  }
-
-                  const address = solArgs[0];
-                  addOutput({
-                    type: "info",
-                    content: `ᛉ Seeking digital artifacts of ${address.substring(
-                      0,
-                      8
-                    )}...`,
-                  });
-
-                  const nfts = await heliusAPI.current.getNFTs(address);
-
-                  let result = `\nᚨ NFT GALLERY\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-                  result += `Address: ${address.substring(
-                    0,
-                    8
-                  )}...${address.substring(address.length - 8)}\n\n`;
-
-                  if (!nfts || nfts.length === 0) {
-                    result += `No artifacts discovered.\n`;
-                  } else {
-                    nfts.slice(0, 10).forEach((nft, idx) => {
-                      result += `${idx + 1}. ${
-                        nft.name || "Unnamed Artifact"
-                      }\n`;
-                      if (nft.symbol) result += `   Symbol: ${nft.symbol}\n`;
-                      if (nft.mint)
-                        result += `   Mint: ${nft.mint.substring(0, 16)}...\n`;
-                      result += `\n`;
-                    });
-
-                    if (nfts.length > 10) {
-                      result += `... and ${nfts.length - 10} more artifacts\n`;
-                    }
-                  }
-
-                  result += `\nᛗ ${nfts.length || 0} pieces in the collection`;
-                  addOutput({ type: "success", content: result });
-                  showToast(`${nfts.length || 0} NFTs discovered ᛗ`, "success");
-                  break;
-                }
-
-                case "tx": {
-                  if (solArgs.length === 0) {
-                    addOutput({
-                      type: "error",
-                      content:
-                        "ᛪ Usage: sol tx [signature]\nExample: sol tx 5wHu1qwD7q5ifaN5nwdcDqDrdGCJqbvyxXJHvT5RJVkz...",
-                    });
-                    break;
-                  }
-
-                  const signature = solArgs[0];
-                  addOutput({
-                    type: "info",
-                    content: `ᛉ Decoding transaction ${signature.substring(
-                      0,
-                      16
-                    )}...`,
-                  });
-
-                  const txData = await heliusAPI.current.parseTransaction(
-                    signature
-                  );
-
-                  let result = `\nᚱ TRANSACTION SCROLL\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-                  result += `Signature: ${signature.substring(0, 16)}...\n`;
-
-                  if (txData) {
-                    if (txData.type) result += `Type: ${txData.type}\n`;
-                    if (txData.timestamp)
-                      result += `Time: ${new Date(
-                        txData.timestamp * 1000
-                      ).toLocaleString()}\n`;
-                    if (txData.fee) result += `Fee: ${txData.fee} lamports\n`;
-                    if (txData.status) result += `Status: ${txData.status}\n`;
-
-                    if (txData.description) {
-                      result += `\nDescription:\n${txData.description}\n`;
-                    }
-                  } else {
-                    result += `\nThe transaction remains veiled in mystery.\n`;
-                  }
-
-                  result += `\nᛗ Inscribed upon the chain`;
-                  addOutput({ type: "success", content: result });
-                  showToast("Transaction decoded ᛗ", "success");
-                  break;
-                }
-
-                case "history": {
-                  if (solArgs.length === 0) {
-                    addOutput({
-                      type: "error",
-                      content:
-                        "ᛪ Usage: sol history [address]\nExample: sol history 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-                    });
-                    break;
-                  }
-
-                  const address = solArgs[0];
-                  addOutput({
-                    type: "info",
-                    content: `ᛉ Unraveling the saga of ${address.substring(
-                      0,
-                      8
-                    )}...`,
-                  });
-
-                  const history = await heliusAPI.current.getTransactionHistory(
-                    address,
-                    10
-                  );
-
-                  let result = `\nᚺ TRANSACTION CHRONICLES\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-                  result += `Address: ${address.substring(
-                    0,
-                    8
-                  )}...${address.substring(address.length - 8)}\n\n`;
-
-                  if (!history || history.length === 0) {
-                    result += `No tales to tell... yet.\n`;
-                  } else {
-                    history.slice(0, 10).forEach((tx, idx) => {
-                      result += `${idx + 1}. ${tx.type || "Transaction"}\n`;
-                      if (tx.timestamp)
-                        result += `   Time: ${new Date(
-                          tx.timestamp * 1000
-                        ).toLocaleString()}\n`;
-                      if (tx.signature)
-                        result += `   Sig: ${tx.signature.substring(
-                          0,
-                          16
-                        )}...\n`;
-                      result += `\n`;
-                    });
-                  }
-
-                  result += `\nᛗ The ledger never forgets`;
-                  addOutput({ type: "success", content: result });
-                  showToast("History revealed ᛗ", "success");
-                  break;
-                }
-
-                case "assets": {
-                  if (solArgs.length === 0) {
-                    addOutput({
-                      type: "error",
-                      content:
-                        "ᛪ Usage: sol assets [address]\nExample: sol assets 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-                    });
-                    break;
-                  }
-
-                  const address = solArgs[0];
-                  addOutput({
-                    type: "info",
-                    content: `ᛉ Cataloging all assets of ${address.substring(
-                      0,
-                      8
-                    )}...`,
-                  });
-
-                  const assets = await heliusAPI.current.getAssetsByOwner(
-                    address
-                  );
-
-                  let result = `\nᛟ COMPLETE INVENTORY\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-                  result += `Address: ${address.substring(
-                    0,
-                    8
-                  )}...${address.substring(address.length - 8)}\n\n`;
-
-                  if (assets) {
-                    result += `Assets discovered and cataloged.\n`;
-                    result += JSON.stringify(assets, null, 2).substring(0, 500);
-                    result += `\n...\n`;
-                  } else {
-                    result += `The vault lies empty.\n`;
-                  }
-
-                  result += `\nᛗ Complete asset scan`;
-                  addOutput({ type: "success", content: result });
-                  showToast("Assets cataloged ᛗ", "success");
-                  break;
-                }
-
-                default:
-                  addOutput({
-                    type: "error",
-                    content: `ᛪ Unknown Solana command: "${solCommand}"\nAvailable: balance, tokens, nfts, tx, history, assets`,
-                  });
-                  showToast("Unknown command ᛪ", "error");
-              }
-            } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ The Solana oracle remains silent: ${error.message}`,
-              });
-              showToast("Solana query failed ᛪ", "error");
-            }
-            break;
-          }
 
           case "cmc": {
             if (args.length === 0) {

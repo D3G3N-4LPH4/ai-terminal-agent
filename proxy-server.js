@@ -101,89 +101,6 @@ app.use('/api/cmc', async (req, res) => {
   }
 });
 
-// Proxy endpoint for Helius (Solana)
-app.post('/api/helius/rpc', async (req, res) => {
-  const apiKey = req.headers['x-helius-api-key'];
-
-  if (!apiKey) {
-    return res.status(401).json({ error: 'API key required' });
-  }
-
-  try {
-    const response = await fetch(`https://mainnet.helius-rpc.com/?api-key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(req.body)
-    });
-
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    console.error('Helius proxy error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.use('/api/helius', async (req, res, next) => {
-  // Skip the RPC endpoint, let it be handled by the specific route above
-  if (req.path === '/rpc') {
-    return next();
-  }
-
-  const apiKey = req.headers['x-helius-api-key'];
-  const endpoint = req.url;
-
-  if (!apiKey) {
-    return res.status(401).json({ error: 'API key required' });
-  }
-
-  try {
-    const separator = endpoint.includes('?') ? '&' : '?';
-    const response = await fetch(`https://api.helius.xyz/v0${endpoint}${separator}api-key=${apiKey}`, {
-      method: req.method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
-    });
-
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    console.error('Helius proxy error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Proxy endpoint for Dune Analytics
-app.use('/api/dune', async (req, res) => {
-  const apiKey = req.headers['x-dune-api-key'];
-  const endpoint = req.url;
-
-  if (!apiKey) {
-    return res.status(401).json({ error: 'API key required' });
-  }
-
-  try {
-    const response = await fetch(`https://api.dune.com/api/v1${endpoint}`, {
-      method: req.method,
-      headers: {
-        'X-Dune-API-Key': apiKey,
-        'Content-Type': 'application/json'
-      },
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
-    });
-
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    console.error('Dune proxy error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Proxy endpoint for ScraperAPI - Web Scraping
 app.get('/api/scraper', async (req, res) => {
   const apiKey = req.headers['x-scraper-api-key'];
@@ -902,8 +819,6 @@ app.listen(PORT, async () => {
 ║                                                           ║
 ║   Available endpoints:                                    ║
 ║   • /api/cmc/*       - CoinMarketCap proxy               ║
-║   • /api/helius/*    - Helius/Solana proxy               ║
-║   • /api/dune/*      - Dune Analytics proxy              ║
 ║   • /api/scraper     - ScraperAPI proxy                  ║
 ║   • /api/santiment   - Santiment GraphQL proxy           ║
 ║   • /api/parallel/*  - Parallel AI proxy                 ║

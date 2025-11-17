@@ -5,12 +5,10 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
   // Access API_CONFIG from window (made global in AITerminalAgent.jsx)
   const API_CONFIG = typeof window !== 'undefined' ? window.API_CONFIG : {};
 
-  const [duneKey, setDuneKey] = useState(API_CONFIG.dune?.apiKey || "");
   const [openRouterKey, setOpenRouterKey] = useState(
     API_CONFIG.openRouter?.apiKey || ""
   );
   const [scraperKey, setScraperKey] = useState(API_CONFIG.scraperAPI?.apiKey || "");
-  const [heliusKey, setHeliusKey] = useState(API_CONFIG.helius?.apiKey || "");
   const [cmcKey, setCmcKey] = useState(API_CONFIG.coinMarketCap?.apiKey || "");
   const [santimentKey, setSantimentKey] = useState(API_CONFIG.santiment?.apiKey || "");
   const [coinGeckoKey, setCoinGeckoKey] = useState(API_CONFIG.coinGecko?.apiKey || "");
@@ -18,19 +16,15 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
   const [showKeys, setShowKeys] = useState(false);
 
   const handleSave = () => {
-    localStorage.setItem("dune_api_key", duneKey);
     localStorage.setItem("openrouter_api_key", openRouterKey);
     localStorage.setItem("scraper_api_key", scraperKey);
-    localStorage.setItem("helius_api_key", heliusKey);
     localStorage.setItem("coinmarketcap_api_key", cmcKey);
     localStorage.setItem("santiment_api_key", santimentKey);
     localStorage.setItem("coingecko_api_key", coinGeckoKey);
     localStorage.setItem("parallel_api_key", parallelKey);
 
-    if (API_CONFIG.dune) API_CONFIG.dune.apiKey = duneKey;
     if (API_CONFIG.openRouter) API_CONFIG.openRouter.apiKey = openRouterKey;
     if (API_CONFIG.scraperAPI) API_CONFIG.scraperAPI.apiKey = scraperKey;
-    if (API_CONFIG.helius) API_CONFIG.helius.apiKey = heliusKey;
     if (API_CONFIG.coinMarketCap) API_CONFIG.coinMarketCap.apiKey = cmcKey;
     if (API_CONFIG.santiment) API_CONFIG.santiment.apiKey = santimentKey;
     if (API_CONFIG.coinGecko) API_CONFIG.coinGecko.apiKey = coinGeckoKey;
@@ -38,7 +32,7 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
 
     // Notify parent to reinitialize API instances
     if (onSave) {
-      onSave(duneKey, openRouterKey, scraperKey, heliusKey, cmcKey, santimentKey, coinGeckoKey, parallelKey);
+      onSave(openRouterKey, scraperKey, cmcKey, santimentKey, coinGeckoKey, parallelKey);
     }
 
     onClose();
@@ -67,30 +61,6 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
         </div>
 
         <div className="space-y-4 sm:space-y-6 overflow-y-auto flex-1 pr-2">
-          <div>
-            <label className={`${theme.text} block mb-2 font-semibold`}>
-              Dune Analytics API Key
-            </label>
-            <p className="text-gray-400 text-sm mb-2">
-              Get your API key from{" "}
-              <a
-                href="https://dune.com/settings/api"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:underline"
-              >
-                dune.com/settings/api
-              </a>
-            </p>
-            <input
-              type={showKeys ? "text" : "password"}
-              value={duneKey}
-              onChange={(e) => setDuneKey(e.target.value)}
-              placeholder="Enter Dune API key"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
           <div>
             <label className={`${theme.text} block mb-2 font-semibold`}>
               OpenRouter API Key
@@ -141,30 +111,6 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
 
           <div>
             <label className={`${theme.text} block mb-2 font-semibold`}>
-              Helius API Key (Solana)
-            </label>
-            <p className="text-gray-400 text-sm mb-2">
-              Get your API key from{" "}
-              <a
-                href="https://dashboard.helius.dev"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:underline"
-              >
-                dashboard.helius.dev
-              </a>
-            </p>
-            <input
-              type={showKeys ? "text" : "password"}
-              value={heliusKey}
-              onChange={(e) => setHeliusKey(e.target.value)}
-              placeholder="Enter Helius API key"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className={`${theme.text} block mb-2 font-semibold`}>
               CoinMarketCap API Key
             </label>
             <p className="text-gray-400 text-sm mb-2">
@@ -175,7 +121,7 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
                 rel="noopener noreferrer"
                 className="text-blue-400 hover:underline"
               >
-                pro.coinmarketcap.com/account
+                pro.coinmarketcap.com
               </a>
             </p>
             <input
@@ -189,7 +135,7 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
 
           <div>
             <label className={`${theme.text} block mb-2 font-semibold`}>
-              Santiment API Key (On-Chain Metrics)
+              Santiment API Key
             </label>
             <p className="text-gray-400 text-sm mb-2">
               Get your API key from{" "}
@@ -199,9 +145,8 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
                 rel="noopener noreferrer"
                 className="text-blue-400 hover:underline"
               >
-                app.santiment.net/account
+                santiment.net
               </a>
-              {" "}(Enhances analyze command with social & on-chain data)
             </p>
             <input
               type={showKeys ? "text" : "password"}
@@ -214,44 +159,42 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
 
           <div>
             <label className={`${theme.text} block mb-2 font-semibold`}>
-              CoinGecko API Key (Pro/Premium Tier)
+              CoinGecko Pro API Key (Optional)
             </label>
             <p className="text-gray-400 text-sm mb-2">
-              Get your API key from{" "}
+              Free tier works without key. For Pro features:{" "}
               <a
                 href="https://www.coingecko.com/en/api/pricing"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 hover:underline"
               >
-                coingecko.com/api/pricing
+                coingecko.com/api
               </a>
-              {" "}(Optional - unlocks higher rate limits & premium endpoints)
             </p>
             <input
               type={showKeys ? "text" : "password"}
               value={coinGeckoKey}
               onChange={(e) => setCoinGeckoKey(e.target.value)}
-              placeholder="Enter CoinGecko API key (optional)"
+              placeholder="Enter CoinGecko Pro API key (optional)"
               className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
             />
           </div>
 
           <div>
             <label className={`${theme.text} block mb-2 font-semibold`}>
-              Parallel AI API Key (Web Research)
+              Parallel AI API Key
             </label>
             <p className="text-gray-400 text-sm mb-2">
               Get your API key from{" "}
               <a
-                href="https://platform.parallel.ai/home"
+                href="https://platform.parallel.ai"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 hover:underline"
               >
-                platform.parallel.ai
+                parallel.ai
               </a>
-              {" "}(20,000 requests free - enables deep research, web search & extraction)
             </p>
             <input
               type={showKeys ? "text" : "password"}
@@ -262,7 +205,7 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pt-2 flex-shrink-0">
             <input
               type="checkbox"
               id="showKeys"
@@ -270,46 +213,32 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
               onChange={(e) => setShowKeys(e.target.checked)}
               className="w-4 h-4"
             />
-            <label
-              htmlFor="showKeys"
-              className="text-gray-300 text-sm cursor-pointer"
-            >
+            <label htmlFor="showKeys" className="text-gray-400 text-sm">
               Show API keys
             </label>
           </div>
+        </div>
 
-          <div className="flex gap-3 pt-4">
-            <button
-              onClick={handleSave}
-              className={`flex-1 ${theme.bgAccent} text-white px-6 py-3 rounded-xl font-bold hover:scale-105 transition-all ${theme.glow}`}
-            >
-              Save API Keys
-            </button>
-            <button
-              onClick={onClose}
-              className="flex-1 bg-gray-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-600 transition-all"
-            >
-              Cancel
-            </button>
-          </div>
-
-          <div
-            className={`${theme.glass} border ${theme.border} rounded-lg p-4`}
+        <div className="flex gap-3 mt-6 flex-shrink-0">
+          <button
+            onClick={handleSave}
+            className={`flex-1 ${theme.bg} ${theme.border} ${theme.text} px-6 py-3 rounded-lg font-semibold hover:${theme.accent} ${theme.shadow} transition-all`}
           >
-            <div className="flex items-start gap-2">
-              <Info size={20} className={theme.accent} />
-              <div className="text-sm text-gray-300">
-                <p className="font-semibold mb-1">
-                  API keys are stored locally
-                </p>
-                <p>
-                  Your API keys are stored in your browser's local storage and
-                  never sent to any third-party servers except the respective
-                  APIs (Dune and OpenRouter).
-                </p>
-              </div>
-            </div>
-          </div>
+            Save Keys
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 bg-gray-800 text-gray-300 px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition-all"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <div className={`${theme.text} text-xs opacity-75 mt-4 flex items-start gap-2 flex-shrink-0`}>
+          <Info size={16} className="mt-0.5 flex-shrink-0" />
+          <span>
+            API keys are stored locally in your browser. They are never sent to any server except the respective API endpoints.
+          </span>
         </div>
       </div>
     </div>
