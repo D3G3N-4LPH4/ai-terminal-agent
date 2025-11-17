@@ -35,43 +35,6 @@ const AVAILABLE_TOOLS = [
   {
     type: "function",
     function: {
-      name: "get_solana_balance",
-      description:
-        "Get the SOL balance of a Solana wallet address in real-time",
-      parameters: {
-        type: "object",
-        properties: {
-          address: {
-            type: "string",
-            description:
-              "The Solana wallet address (base58 encoded public key)",
-          },
-        },
-        required: ["address"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_token_accounts",
-      description:
-        "Get all SPL token accounts and balances for a Solana wallet address",
-      parameters: {
-        type: "object",
-        properties: {
-          address: {
-            type: "string",
-            description: "The Solana wallet address",
-          },
-        },
-        required: ["address"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "search_crypto_assets",
       description:
         "Search for cryptocurrency information across multiple assets. Returns name, symbol, price, market cap, and other key metrics.",

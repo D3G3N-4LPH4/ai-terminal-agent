@@ -453,51 +453,6 @@ export default function AITerminalAgent() {
           };
         }
 
-        case "get_solana_balance": {
-          const address = toolArgs.address;
-
-          if (!heliusAPI.current || !API_CONFIG.helius.apiKey) {
-            return {
-              error:
-                "Helius API not configured. Use 'apikeys' command to set up.",
-            };
-          }
-
-          const balance = await heliusAPI.current.getBalance(address);
-          return {
-            address: address,
-            balance_sol: balance / 1e9, // Convert lamports to SOL
-            balance_lamports: balance,
-          };
-        }
-
-        case "get_token_accounts": {
-          const address = toolArgs.address;
-
-          if (!heliusAPI.current || !API_CONFIG.helius.apiKey) {
-            return {
-              error:
-                "Helius API not configured. Use 'apikeys' command to set up.",
-            };
-          }
-
-          const accounts = await heliusAPI.current.getTokenAccounts(address);
-
-          // Format the response
-          const tokens = accounts.map((acc) => ({
-            mint: acc.mint,
-            amount: acc.amount,
-            decimals: acc.decimals,
-            symbol: acc.symbol || "Unknown",
-          }));
-
-          return {
-            address: address,
-            token_count: tokens.length,
-            tokens: tokens.slice(0, 10), // Limit to top 10 for brevity
-          };
-        }
-
         case "search_crypto_assets": {
           const query = toolArgs.query.toLowerCase();
 
@@ -4378,11 +4333,11 @@ Type "help" for commands`,
     });
 
     // Check API configuration
-    if (!API_CONFIG.dune.apiKey || !API_CONFIG.openRouter.apiKey) {
+    if (!API_CONFIG.openRouter.apiKey) {
       setTimeout(() => {
         addOutput({
           type: "info",
-          content: `💡 TIP: Configure your API keys with "apikeys" command\n   • Dune Analytics: blockchain data\n   • OpenRouter: AI assistant\n   • CoinGecko: works without key`,
+          content: `💡 TIP: Configure your API keys with "apikeys" command\n   • OpenRouter: AI assistant\n   • CoinGecko: works without key\n   • CoinMarketCap: enhanced crypto data`,
         });
       }, 1000);
     }
