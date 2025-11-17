@@ -1284,7 +1284,7 @@ export default function AITerminalAgent() {
           case "trending": {
             addOutput({
               type: "info",
-              content: "📰 Fetching trending cryptocurrencies...",
+              content: getLoadingMessage(OperationType.FETCH_TRENDING),
             });
 
             try {
@@ -1316,10 +1316,7 @@ export default function AITerminalAgent() {
               addOutput({ type: "success", content: result });
               showToast("Trending data loaded", "success");
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `Failed to fetch trending data: ${error.message}`,
-              });
+              handleCommandError(error, 'trending', addOutput);
               showToast("Trending data fetch failed", "error");
             }
             break;
@@ -2035,7 +2032,7 @@ Be comprehensive but concise (max 400 words).`;
 
             addOutput({
               type: "info",
-              content: `ᚠ Fenrir awakens... channeling ancient wisdom ᛗ`,
+              content: getLoadingMessage(OperationType.AI_CHAT),
             });
 
             try {
