@@ -1,4 +1,8 @@
 // API_CONFIG should be imported or defined in consuming code
+import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
+import { caches, cachedAPICall } from '../utils/requestCache.js';
+import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
+
 const getAPIConfig = () => {
   if (typeof window !== 'undefined' && window.API_CONFIG) {
     return window.API_CONFIG;
@@ -20,13 +24,14 @@ class ParallelAPI {
 
   async search(objective, queries = [], maxResults = 10) {
     if (!this.apiKey || this.apiKey.trim() === "") {
-      throw new Error(
-        "Parallel AI API key not configured. Use 'apikeys' command to set it up."
+      throw createError(
+        "Parallel AI API key not configured. Use 'apikeys' command to set it up.",
+        ErrorType.API_KEY_MISSING
       );
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/search`, {
+      const response = await fetchWithTimeout(`${this.baseUrl}/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -37,10 +42,10 @@ class ParallelAPI {
           queries: queries,
           max_results: maxResults,
         }),
-      });
+      }, 30000); // 30s timeout for search
 
       if (!response.ok) {
-        throw new Error(`Parallel Search API error: ${response.statusText}`);
+        await validateAPIResponse(response, 'Parallel AI');
       }
 
       return await response.json();

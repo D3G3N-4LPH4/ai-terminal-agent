@@ -1204,20 +1204,23 @@ export default function AITerminalAgent() {
               break;
             }
 
-            const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
-
-            if (!coinId) {
+            // Use coinValidation utility
+            const validation = getCoinIdOrError(args[0], COIN_ID_MAP);
+            if (!validation.valid) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}`,
+                content: validation.error,
               });
               break;
             }
 
+            const symbol = args[0].toUpperCase();
+            const coinId = validation.coinId;
+
+            // Use improved loading message
             addOutput({
               type: "info",
-              content: `ᛉ Gathering market wisdom for ${symbol}...`,
+              content: getLoadingMessage(OperationType.FETCH_MARKET, { asset: symbol }),
             });
 
             try {
@@ -1237,10 +1240,7 @@ export default function AITerminalAgent() {
 
               addOutput({ type: "success", content: result });
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ The market hides from view: ${error.message}`,
-              });
+              handleCommandError(error, `market ${symbol}`, addOutput);
             }
             break;
           }
@@ -1248,7 +1248,7 @@ export default function AITerminalAgent() {
           case "global": {
             addOutput({
               type: "info",
-              content: "ᛉ Surveying the nine realms of crypto...",
+              content: getLoadingMessage(OperationType.FETCH_MARKET),
             });
 
             try {
@@ -1274,10 +1274,7 @@ export default function AITerminalAgent() {
               addOutput({ type: "success", content: result });
               showToast("Global data revealed ᛗ", "success");
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ The global view eludes us: ${error.message}`,
-              });
+              handleCommandError(error, 'global', addOutput);
               showToast("Global data fetch failed ᛪ", "error");
             }
             break;

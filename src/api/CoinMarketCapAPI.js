@@ -1,4 +1,8 @@
 // API_CONFIG should be imported or defined in consuming code
+import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
+import { caches, cachedAPICall } from '../utils/requestCache.js';
+import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
+
 const getAPIConfig = () => {
   if (typeof window !== 'undefined' && window.API_CONFIG) {
     return window.API_CONFIG;
@@ -20,8 +24,9 @@ class CoinMarketCapAPI {
 
   async makeRequest(endpoint, params = {}) {
     if (!this.apiKey) {
-      throw new Error(
-        "CoinMarketCap API key not configured. Use 'apikeys' command to set it up."
+      throw createError(
+        "CoinMarketCap API key not configured. Use 'apikeys' command to set it up.",
+        ErrorType.API_KEY_MISSING
       );
     }
 
@@ -31,20 +36,16 @@ class CoinMarketCapAPI {
         queryString ? `?${queryString}` : ""
       }`;
 
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: "GET",
         headers: {
           "X-CMC_PRO_API_KEY": this.apiKey,
           Accept: "application/json",
         },
-      });
+      }, 15000); // 15s timeout
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.status?.error_message ||
-            `CMC API error: ${response.statusText}`
-        );
+        await validateAPIResponse(response, 'CoinMarketCap');
       }
 
       const data = await response.json();

@@ -1,5 +1,8 @@
 // OpenRouter AI API Client
 
+import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
+import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
+
 export class OpenRouterAPI {
   constructor(apiKey, baseUrl, defaultModel) {
     this.apiKey = apiKey;
@@ -13,8 +16,9 @@ export class OpenRouterAPI {
 
   async chat(messages, options = {}) {
     if (!this.apiKey) {
-      throw new Error(
-        "OpenRouter API key not configured. Use 'apikeys' command to set it up."
+      throw createError(
+        "OpenRouter API key not configured. Use 'apikeys' command to set it up.",
+        ErrorType.API_KEY_MISSING
       );
     }
 
@@ -40,7 +44,7 @@ export class OpenRouterAPI {
         };
       }
 
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      const response = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
@@ -49,14 +53,10 @@ export class OpenRouterAPI {
           "X-Title": "Fenrir AI Terminal",
         },
         body: JSON.stringify(requestBody),
-      });
+      }, 60000); // 60s timeout for AI responses
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error?.message ||
-            `OpenRouter API error: ${response.statusText}`
-        );
+        await validateAPIResponse(response, 'OpenRouter');
       }
 
       const data = await response.json();
