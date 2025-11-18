@@ -48,6 +48,7 @@ import {
   MCPAPI,
 } from "./api";
 import CoinGeckoMCP from "./api/CoinGeckoMCP";
+import { AIFallbackOrchestrator } from "./api/AIFallbackOrchestrator";
 
 // Import configuration
 import { THEMES } from "./config/themes";
@@ -154,6 +155,19 @@ const API_CONFIG = {
         provider: "Mistral",
       },
     ],
+  },
+  // Fallback AI Providers
+  anthropic: {
+    apiKey: localStorage.getItem("anthropic_api_key") || "",
+    model: "claude-3-5-sonnet-20241022",
+  },
+  groq: {
+    apiKey: localStorage.getItem("groq_api_key") || "",
+    model: "llama-3.1-70b-versatile",
+  },
+  gemini: {
+    apiKey: localStorage.getItem("gemini_api_key") || "",
+    model: "gemini-1.5-flash",
   },
   scraperAPI: {
     // Using backend proxy to avoid CORS issues
@@ -319,6 +333,7 @@ export default function AITerminalAgent() {
   const terminalRef = useRef(null);
   const inputRef = useRef(null);
   const openRouterAPI = useRef(null);
+  const aiFallback = useRef(null); // AI Fallback Orchestrator
   const coinGeckoAPI = useRef(null);
   const coinGeckoMCP = useRef(null);
   const scraperAPI = useRef(null);
@@ -349,11 +364,16 @@ export default function AITerminalAgent() {
 
   // Initialize APIs
   useEffect(() => {
+    // Initialize primary OpenRouter API
     openRouterAPI.current = new OpenRouterAPI(
       API_CONFIG.openRouter.apiKey,
       API_CONFIG.openRouter.baseUrl,
       API_CONFIG.openRouter.defaultModel
     );
+
+    // Initialize AI Fallback Orchestrator
+    aiFallback.current = new AIFallbackOrchestrator(API_CONFIG);
+
     scraperAPI.current = new WebScraperAPI();
     scraperAPIAdvanced.current = new ScraperAPI(API_CONFIG.scraperAPI.apiKey);
     coinMarketCapAPI.current = new CoinMarketCapAPI(API_CONFIG.coinMarketCap.apiKey);
@@ -2161,12 +2181,23 @@ Remember: You're not just an AI - you're Fenrir, unchained and ready to explore 
                 },
               ];
 
-              // First call: Check if AI wants to use tools
-              let response = await openRouterAPI.current.chat(messages, {
-                tools: AVAILABLE_TOOLS,
-                tool_choice: "auto",
-                includeReasoning: true,
-              });
+              // First call: Check if AI wants to use tools (with fallback)
+              let response = await aiFallback.current.chat(
+                messages,
+                {
+                  tools: AVAILABLE_TOOLS,
+                  tool_choice: "auto",
+                  includeReasoning: true,
+                },
+                (providerName, tier, isFree) => {
+                  // Notify user when switching to fallback provider
+                  const freeTag = isFree ? ' (FREE)' : '';
+                  addOutput({
+                    type: "info",
+                    content: `ᛋ Switching to ${providerName}${freeTag} backup...`,
+                  });
+                }
+              );
 
               // Display reasoning if available
               if (response.reasoning) {
@@ -2239,12 +2270,22 @@ Remember: You're not just an AI - you're Fenrir, unchained and ready to explore 
                   }
                 }
 
-                // Get AI's response with tool results
-                response = await openRouterAPI.current.chat(messages, {
-                  tools: AVAILABLE_TOOLS,
-                  tool_choice: "auto",
-                  includeReasoning: true,
-                });
+                // Get AI's response with tool results (with fallback)
+                response = await aiFallback.current.chat(
+                  messages,
+                  {
+                    tools: AVAILABLE_TOOLS,
+                    tool_choice: "auto",
+                    includeReasoning: true,
+                  },
+                  (providerName, tier, isFree) => {
+                    const freeTag = isFree ? ' (FREE)' : '';
+                    addOutput({
+                      type: "info",
+                      content: `ᛋ Switching to ${providerName}${freeTag} backup...`,
+                    });
+                  }
+                );
 
                 // Display reasoning if available
                 if (response.reasoning) {
@@ -2353,11 +2394,21 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 },
               ];
 
-              // Call AI with tool access
-              let response = await openRouterAPI.current.chat(messages, {
-                tools: AVAILABLE_TOOLS,
-                tool_choice: "auto",
-              });
+              // Call AI with tool access (with fallback)
+              let response = await aiFallback.current.chat(
+                messages,
+                {
+                  tools: AVAILABLE_TOOLS,
+                  tool_choice: "auto",
+                },
+                (providerName, tier, isFree) => {
+                  const freeTag = isFree ? ' (FREE)' : '';
+                  addOutput({
+                    type: "info",
+                    content: `ᛋ Switching to ${providerName}${freeTag} backup...`,
+                  });
+                }
+              );
 
               // Handle tool calls
               let maxIterations = 5;
@@ -2418,10 +2469,20 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                   }
                 }
 
-                response = await openRouterAPI.current.chat(messages, {
-                  tools: AVAILABLE_TOOLS,
-                  tool_choice: "auto",
-                });
+                response = await aiFallback.current.chat(
+                  messages,
+                  {
+                    tools: AVAILABLE_TOOLS,
+                    tool_choice: "auto",
+                  },
+                  (providerName, tier, isFree) => {
+                    const freeTag = isFree ? ' (FREE)' : '';
+                    addOutput({
+                      type: "info",
+                      content: `ᛋ Switching to ${providerName}${freeTag} backup...`,
+                    });
+                  }
+                );
               }
 
               const finalResponse = typeof response === "string" ? response : response.content;
