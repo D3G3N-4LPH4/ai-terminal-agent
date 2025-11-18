@@ -8,6 +8,9 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
   const [openRouterKey, setOpenRouterKey] = useState(
     API_CONFIG.openRouter?.apiKey || ""
   );
+  const [anthropicKey, setAnthropicKey] = useState(API_CONFIG.anthropic?.apiKey || "");
+  const [groqKey, setGroqKey] = useState(API_CONFIG.groq?.apiKey || "");
+  const [geminiKey, setGeminiKey] = useState(API_CONFIG.gemini?.apiKey || "");
   const [scraperKey, setScraperKey] = useState(API_CONFIG.scraperAPI?.apiKey || "");
   const [cmcKey, setCmcKey] = useState(API_CONFIG.coinMarketCap?.apiKey || "");
   const [santimentKey, setSantimentKey] = useState(API_CONFIG.santiment?.apiKey || "");
@@ -17,6 +20,9 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
 
   const handleSave = () => {
     localStorage.setItem("openrouter_api_key", openRouterKey);
+    localStorage.setItem("anthropic_api_key", anthropicKey);
+    localStorage.setItem("groq_api_key", groqKey);
+    localStorage.setItem("gemini_api_key", geminiKey);
     localStorage.setItem("scraper_api_key", scraperKey);
     localStorage.setItem("coinmarketcap_api_key", cmcKey);
     localStorage.setItem("santiment_api_key", santimentKey);
@@ -24,6 +30,9 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
     localStorage.setItem("parallel_api_key", parallelKey);
 
     if (API_CONFIG.openRouter) API_CONFIG.openRouter.apiKey = openRouterKey;
+    if (API_CONFIG.anthropic) API_CONFIG.anthropic.apiKey = anthropicKey;
+    if (API_CONFIG.groq) API_CONFIG.groq.apiKey = groqKey;
+    if (API_CONFIG.gemini) API_CONFIG.gemini.apiKey = geminiKey;
     if (API_CONFIG.scraperAPI) API_CONFIG.scraperAPI.apiKey = scraperKey;
     if (API_CONFIG.coinMarketCap) API_CONFIG.coinMarketCap.apiKey = cmcKey;
     if (API_CONFIG.santiment) API_CONFIG.santiment.apiKey = santimentKey;
@@ -32,7 +41,7 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
 
     // Notify parent to reinitialize API instances
     if (onSave) {
-      onSave(openRouterKey, scraperKey, cmcKey, santimentKey, coinGeckoKey, parallelKey);
+      onSave(openRouterKey, anthropicKey, groqKey, geminiKey, scraperKey, cmcKey, santimentKey, coinGeckoKey, parallelKey);
     }
 
     onClose();
@@ -83,6 +92,113 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
               placeholder="Enter OpenRouter API key"
               className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
             />
+          </div>
+
+          {/* AI Fallback Providers Section */}
+          <div className="pt-4 border-t border-gray-700">
+            <h3 className={`${theme.text} text-lg font-bold mb-4 flex items-center gap-2`}>
+              <span className="text-green-400">🔄</span> AI Fallback Providers (Optional)
+            </h3>
+            <p className="text-gray-400 text-sm mb-4">
+              Add backup AI providers for 99.9% uptime. Free options available!
+            </p>
+
+            {/* Anthropic - Premium fallback */}
+            <div className="mb-4 p-4 bg-gray-900/50 rounded-lg border border-purple-500/30">
+              <div className="flex items-center gap-2 mb-2">
+                <label className={`${theme.text} font-semibold`}>
+                  Anthropic API Key
+                </label>
+                <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-300">
+                  PREMIUM
+                </span>
+              </div>
+              <p className="text-gray-400 text-xs mb-2">
+                Direct Claude access, same quality as OpenRouter. Get key from{" "}
+                <a
+                  href="https://console.anthropic.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-purple-400 hover:underline"
+                >
+                  console.anthropic.com
+                </a>
+              </p>
+              <input
+                type={showKeys ? "text" : "password"}
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+                placeholder="sk-ant-... (optional)"
+                className="w-full bg-gray-900 border border-purple-500/30 rounded-lg px-4 py-2 text-white focus:border-purple-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Groq - Free & Fast */}
+            <div className="mb-4 p-4 bg-gray-900/50 rounded-lg border border-green-500/30">
+              <div className="flex items-center gap-2 mb-2">
+                <label className={`${theme.text} font-semibold`}>
+                  Groq API Key
+                </label>
+                <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300">
+                  FREE ⚡ FAST
+                </span>
+              </div>
+              <p className="text-gray-400 text-xs mb-2">
+                Lightning-fast Llama 3.1 70B (500 tokens/sec!). Free tier at{" "}
+                <a
+                  href="https://console.groq.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-green-400 hover:underline"
+                >
+                  console.groq.com
+                </a>
+              </p>
+              <input
+                type={showKeys ? "text" : "password"}
+                value={groqKey}
+                onChange={(e) => setGroqKey(e.target.value)}
+                placeholder="gsk_... (optional, free)"
+                className="w-full bg-gray-900 border border-green-500/30 rounded-lg px-4 py-2 text-white focus:border-green-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Gemini - Free Google */}
+            <div className="mb-4 p-4 bg-gray-900/50 rounded-lg border border-blue-500/30">
+              <div className="flex items-center gap-2 mb-2">
+                <label className={`${theme.text} font-semibold`}>
+                  Google Gemini API Key
+                </label>
+                <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-300">
+                  FREE
+                </span>
+              </div>
+              <p className="text-gray-400 text-xs mb-2">
+                Free Gemini 1.5 Flash. Reliable backup from{" "}
+                <a
+                  href="https://ai.google.dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:underline"
+                >
+                  ai.google.dev
+                </a>
+              </p>
+              <input
+                type={showKeys ? "text" : "password"}
+                value={geminiKey}
+                onChange={(e) => setGeminiKey(e.target.value)}
+                placeholder="AIza... (optional, free)"
+                className="w-full bg-gray-900 border border-blue-500/30 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Other APIs Section */}
+          <div className="pt-4 border-t border-gray-700">
+            <h3 className={`${theme.text} text-lg font-bold mb-4`}>
+              Data & Research APIs
+            </h3>
           </div>
 
           <div>
