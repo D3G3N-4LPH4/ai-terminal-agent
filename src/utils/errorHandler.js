@@ -73,6 +73,11 @@ const getActionableMessage = (errorType, context = '') => {
       action: 'Check your API key in "apikeys" settings',
       icon: 'ᛪ',
     },
+    [ErrorType.API_ERROR]: {
+      message: 'API server error',
+      action: 'This is a temporary issue with the API provider. Wait a moment and try again',
+      icon: 'ᛪ',
+    },
     [ErrorType.NETWORK_ERROR]: {
       message: 'Network connection failed',
       action: 'Check your internet connection and backend server status',

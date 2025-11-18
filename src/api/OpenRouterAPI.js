@@ -1,6 +1,6 @@
 // OpenRouter AI API Client
 
-import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
+import { fetchWithTimeout, fetchWithRetry } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
 
 export class OpenRouterAPI {
@@ -44,16 +44,22 @@ export class OpenRouterAPI {
         };
       }
 
-      const response = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": window.location.href,
-          "X-Title": "Fenrir AI Terminal",
+      // Use retry logic for better resilience against transient 500 errors
+      const response = await fetchWithRetry(
+        `${this.baseUrl}/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": window.location.href,
+            "X-Title": "Fenrir AI Terminal",
+          },
+          body: JSON.stringify(requestBody),
         },
-        body: JSON.stringify(requestBody),
-      }, 60000); // 60s timeout for AI responses
+        2, // Max 2 retries for 500 errors
+        60000 // 60s timeout for AI responses
+      );
 
       if (!response.ok) {
         await validateAPIResponse(response, 'OpenRouter');
@@ -103,9 +109,22 @@ export class OpenRouterAPI {
         error.message.includes("not configured") ||
         error.message.includes("No cookie auth") ||
         error.message.includes("Unauthorized");
+
+      // Check if it's a server error (500)
+      const isServerError = error.message.includes("500") || error.message.includes("Internal Server Error");
+
       if (!isConfigError) {
         console.error("OpenRouter error:", error);
       }
+
+      // Provide helpful context for server errors
+      if (isServerError) {
+        throw createError(
+          `OpenRouter server error (temporary issue on their side). Please try again in a moment.\n\nOriginal error: ${error.message}`,
+          ErrorType.API_ERROR
+        );
+      }
+
       throw error;
     }
   }
