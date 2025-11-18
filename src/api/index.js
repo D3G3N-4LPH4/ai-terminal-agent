@@ -8,6 +8,7 @@ export { ScraperAPI } from './ScraperAPI.js';
 export { CoinMarketCapAPI } from './CoinMarketCapAPI.js';
 export { SantimentAPI } from './SantimentAPI.js';
 export { ParallelAPI } from './ParallelAPI.js';
+export { default as MCPAPI } from './MCPAPI.js';
 
 // Re-export defaults for convenience
 export { default as OpenRouterAPIDefault } from './OpenRouterAPI.js';
@@ -17,3 +18,4 @@ export { default as ScraperAPIDefault } from './ScraperAPI.js';
 export { default as CoinMarketCapAPIDefault } from './CoinMarketCapAPI.js';
 export { default as SantimentAPIDefault } from './SantimentAPI.js';
 export { default as ParallelAPIDefault } from './ParallelAPI.js';
+export { default as MCPAPIDefault } from './MCPAPI.js';

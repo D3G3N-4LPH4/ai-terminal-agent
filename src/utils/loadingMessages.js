@@ -116,6 +116,10 @@ export const getLoadingMessage = (operationType, context = {}) => {
     message += ` for ${context.asset}`;
   }
 
+  if (context.query) {
+    message += `: "${context.query}"`;
+  }
+
   if (context.days) {
     message += ` (${context.days} days)`;
   }
@@ -259,6 +263,7 @@ export const OperationType = {
   FETCH_ONCHAIN: 'fetch_onchain',
   AI_CHAT: 'ai_chat',
   AI_ANALYSIS: 'ai_analysis',
+  RESEARCH: 'ai_research',
   AI_RESEARCH: 'ai_research',
   AI_WEBSEARCH: 'ai_websearch',
   ML_TRAINING: 'ml_training',

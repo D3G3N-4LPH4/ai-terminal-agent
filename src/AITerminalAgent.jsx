@@ -45,6 +45,7 @@ import {
   CoinMarketCapAPI,
   SantimentAPI,
   ParallelAPI,
+  MCPAPI,
 } from "./api";
 import CoinGeckoMCP from "./api/CoinGeckoMCP";
 
@@ -325,6 +326,7 @@ export default function AITerminalAgent() {
   const coinMarketCapAPI = useRef(null);
   const santimentAPI = useRef(null);
   const parallelAPI = useRef(null);
+  const mcpAPI = useRef(null);
 
   // ML Service refs
   const mlService = useRef(null);
@@ -363,6 +365,7 @@ export default function AITerminalAgent() {
     );
     coinGeckoMCP.current = new CoinGeckoMCP(API_CONFIG.coinGeckoMCP.apiKey);
     parallelAPI.current = new ParallelAPI(API_CONFIG.parallel.apiKey);
+    mcpAPI.current = new MCPAPI();
 
     // Initialize ML Services
     mlService.current = new MLService();
@@ -972,6 +975,7 @@ export default function AITerminalAgent() {
 ᛉ WEB RESEARCH
   websearch-ai [query]         - AI-powered web search with citations (Perplexity)
   research [topic]             - Deep AI research with citations (Parallel AI)
+  docs [query] [server]        - Search technical documentation (MCP)
   google [query]               - Google Search results (ScraperAPI)
   scrape [url]                 - Extract and analyze any website
 
@@ -1510,6 +1514,18 @@ export default function AITerminalAgent() {
             const researchInput = args.join(" ");
             const isUrl = researchInput.match(/^https?:\/\//);
 
+            // Check if this is a documentation query (could benefit from MCP)
+            const docKeywords = ['how to', 'documentation', 'docs', 'api reference', 'tutorial', 'guide', 'example'];
+            const isLikelyDocQuery = docKeywords.some(keyword => researchInput.toLowerCase().includes(keyword));
+
+            // Suggest MCP for documentation queries
+            if (isLikelyDocQuery && !isUrl) {
+              addOutput({
+                type: "info",
+                content: `ᛋ Tip: For technical documentation, try: docs ${researchInput}\nᛟ Continuing with general research...`,
+              });
+            }
+
             // URL Scraping Mode
             if (isUrl) {
               if (!API_CONFIG.scraperAPI.apiKey || API_CONFIG.scraperAPI.apiKey.trim() === "") {
@@ -1564,10 +1580,7 @@ Be comprehensive but concise (max 400 words).`;
                 addOutput({ type: "success", content: output });
                 showToast("Analysis complete", "success");
               } catch (error) {
-                addOutput({
-                  type: "error",
-                  content: `Failed to analyze URL: ${error.message}`,
-                });
+                handleCommandError(error, `research ${researchInput}`, addOutput);
                 showToast("Scraping failed", "error");
               }
               break;
@@ -1586,7 +1599,7 @@ Be comprehensive but concise (max 400 words).`;
 
             addOutput({
               type: "info",
-              content: `ᛟ Conducting deep research: "${researchInput}"...\nᛉ This may take 15-100 seconds depending on complexity...`,
+              content: getLoadingMessage(OperationType.RESEARCH, { query: researchInput }),
             });
 
             try {
@@ -1633,11 +1646,84 @@ Be comprehensive but concise (max 400 words).`;
               addOutput({ type: "success", content: researchOutput });
               showToast("Research complete", "success");
             } catch (error) {
+              handleCommandError(error, `research ${researchInput}`, addOutput);
+              showToast("Research failed", "error");
+            }
+            break;
+          }
+
+          case "docs": {
+            if (args.length === 0) {
               addOutput({
                 type: "error",
-                content: `ᛪ Research failed: ${error.message}`,
+                content:
+                  "ᛪ Usage: docs [query] [server]\n\nᛉ Documentation Search System:\n• Query documentation programmatically via MCP\n• Access technical docs in real-time\n• Supports multiple doc servers\n\nExamples:\n• docs langchain agents\n• docs ethereum scaling langchain\n• docs react hooks mintlify\n\nAvailable servers: langchain, mintlify",
               });
-              showToast("Research failed", "error");
+              break;
+            }
+
+            // Parse args - last arg might be server name
+            const lastArg = args[args.length - 1].toLowerCase();
+            const availableServers = ['langchain', 'mintlify'];
+            let serverName = 'langchain'; // default
+            let query = args.join(' ');
+
+            if (availableServers.includes(lastArg)) {
+              serverName = lastArg;
+              query = args.slice(0, -1).join(' ');
+            }
+
+            if (!query.trim()) {
+              addOutput({
+                type: "error",
+                content: "ᛪ Please provide a search query.",
+              });
+              break;
+            }
+
+            addOutput({
+              type: "info",
+              content: `ᛟ Searching ${serverName} documentation for: "${query}"...\n   Estimated time: 2-5s`,
+            });
+
+            try {
+              const results = await mcpAPI.current.query(query, serverName, {
+                maxResults: 5,
+              });
+
+              if (!results || results.length === 0) {
+                addOutput({
+                  type: "info",
+                  content: `ᛋ No documentation found for "${query}" in ${serverName}.\n\nTry:\n• Different search terms\n• Another documentation server\n• Broader keywords`,
+                });
+                break;
+              }
+
+              let docsOutput = `\nᛟ DOCUMENTATION RESULTS: ${query}\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+              docsOutput += `Source: ${serverName}\n\n`;
+
+              results.forEach((result, idx) => {
+                docsOutput += `${idx + 1}. ${result.title || 'Untitled'}\n`;
+                if (result.url) {
+                  docsOutput += `   URL: ${result.url}\n`;
+                }
+                if (result.excerpt) {
+                  const excerpt = result.excerpt.substring(0, 200);
+                  docsOutput += `   ${excerpt}${result.excerpt.length > 200 ? '...' : ''}\n`;
+                }
+                if (result.relevance) {
+                  docsOutput += `   Relevance: ${(result.relevance * 100).toFixed(0)}%\n`;
+                }
+                docsOutput += '\n';
+              });
+
+              docsOutput += `ᛏ Found ${results.length} result${results.length > 1 ? 's' : ''} via MCP`;
+
+              addOutput({ type: "success", content: docsOutput });
+              showToast("Documentation retrieved", "success");
+            } catch (error) {
+              handleCommandError(error, `docs ${query}`, addOutput);
+              showToast("Documentation search failed", "error");
             }
             break;
           }
@@ -1807,7 +1893,7 @@ Be comprehensive but concise (max 400 words).`;
 
             addOutput({
               type: "info",
-              content: `ᚱ AI Web Search: "${aiSearchQuery}"\n\nᛋ Searching the web with Perplexity AI...`,
+              content: getLoadingMessage(OperationType.AI_WEBSEARCH, { query: aiSearchQuery }),
             });
 
             try {
@@ -1838,10 +1924,7 @@ Be comprehensive but concise (max 400 words).`;
               addOutput({ type: "success", content: output });
               showToast("AI search complete", "success");
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ AI web search failed: ${error.message}`,
-              });
+              handleCommandError(error, `websearch-ai ${aiSearchQuery}`, addOutput);
               showToast("AI search failed", "error");
             }
             break;
@@ -2110,22 +2193,50 @@ Remember: You're not just an AI - you're Fenrir, unchained and ready to explore 
                 // Execute each tool call
                 for (const toolCall of response.tool_calls) {
                   const toolName = toolCall.function.name;
-                  const toolArgs = JSON.parse(toolCall.function.arguments);
+
+                  // Parse arguments - handle both string and object formats
+                  let toolArgs;
+                  try {
+                    if (typeof toolCall.function.arguments === 'string') {
+                      toolArgs = JSON.parse(toolCall.function.arguments);
+                    } else {
+                      toolArgs = toolCall.function.arguments;
+                    }
+                  } catch (parseError) {
+                    addOutput({
+                      type: "error",
+                      content: `ᛪ Failed to parse tool arguments for ${toolName}: ${parseError.message}`,
+                    });
+                    continue; // Skip this tool call
+                  }
 
                   addOutput({
                     type: "info",
                     content: `ᛉ Consulting the runes (${toolName})...`,
                   });
 
-                  // Execute the tool
-                  const toolResult = await executeTool(toolName, toolArgs);
+                  try {
+                    // Execute the tool
+                    const toolResult = await executeTool(toolName, toolArgs);
 
-                  // Add tool result to messages
-                  messages.push({
-                    role: "tool",
-                    tool_call_id: toolCall.id,
-                    content: JSON.stringify(toolResult),
-                  });
+                    // Add tool result to messages
+                    messages.push({
+                      role: "tool",
+                      tool_call_id: toolCall.id,
+                      content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+                    });
+                  } catch (toolError) {
+                    addOutput({
+                      type: "error",
+                      content: `ᛪ Tool execution failed for ${toolName}: ${toolError.message}`,
+                    });
+                    // Add error result to messages so AI knows it failed
+                    messages.push({
+                      role: "tool",
+                      tool_call_id: toolCall.id,
+                      content: JSON.stringify({ error: toolError.message }),
+                    });
+                  }
                 }
 
                 // Get AI's response with tool results
@@ -2164,10 +2275,8 @@ Remember: You're not just an AI - you're Fenrir, unchained and ready to explore 
               });
               showToast("Fenrir speaks ᛗ", "success");
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ Error: ${error.message}`,
-              });
+              console.error("Talk command error:", error);
+              handleCommandError(error, 'talk', addOutput);
               showToast("The runes fail ᛪ", "error");
             }
             break;
@@ -2265,20 +2374,48 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
                 for (const toolCall of response.tool_calls) {
                   const toolName = toolCall.function.name;
-                  const toolArgs = JSON.parse(toolCall.function.arguments);
+
+                  // Parse arguments - handle both string and object formats
+                  let toolArgs;
+                  try {
+                    if (typeof toolCall.function.arguments === 'string') {
+                      toolArgs = JSON.parse(toolCall.function.arguments);
+                    } else {
+                      toolArgs = toolCall.function.arguments;
+                    }
+                  } catch (parseError) {
+                    addOutput({
+                      type: "error",
+                      content: `ᛪ Failed to parse tool arguments for ${toolName}: ${parseError.message}`,
+                    });
+                    continue; // Skip this tool call
+                  }
 
                   addOutput({
                     type: "info",
                     content: `ᚱ Fetching ${toolName} data...`,
                   });
 
-                  const toolResult = await executeTool(toolName, toolArgs);
+                  try {
+                    const toolResult = await executeTool(toolName, toolArgs);
 
-                  messages.push({
-                    role: "tool",
-                    tool_call_id: toolCall.id,
-                    content: JSON.stringify(toolResult),
-                  });
+                    messages.push({
+                      role: "tool",
+                      tool_call_id: toolCall.id,
+                      content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+                    });
+                  } catch (toolError) {
+                    addOutput({
+                      type: "error",
+                      content: `ᛪ Tool execution failed for ${toolName}: ${toolError.message}`,
+                    });
+                    // Add error result to messages so AI knows it failed
+                    messages.push({
+                      role: "tool",
+                      tool_call_id: toolCall.id,
+                      content: JSON.stringify({ error: toolError.message }),
+                    });
+                  }
                 }
 
                 response = await openRouterAPI.current.chat(messages, {
@@ -2295,10 +2432,8 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
               });
               showToast("Question answered", "success");
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ Error: ${error.message}`,
-              });
+              console.error("Ask command error:", error);
+              handleCommandError(error, 'ask', addOutput);
               showToast("Query failed", "error");
             }
             break;
@@ -2338,14 +2473,18 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             }
 
             const symbol = args[0].toUpperCase();
+
+            // Validate coin symbol
+            const validation = getCoinIdOrError(symbol, COIN_ID_MAP);
+            const coinId = validation.valid ? validation.coinId : COIN_ID_MAP[symbol];
+
             addOutput({
               type: "info",
-              content: `ᛉ Fenrir gazes into ${symbol}'s destiny...`,
+              content: getLoadingMessage(OperationType.AI_ANALYSIS, { asset: symbol }),
             });
 
             try {
               // Get real market data from multiple sources
-              const coinId = COIN_ID_MAP[symbol];
               let marketContext = "";
               let santimentContext = "";
 
@@ -2404,10 +2543,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
               });
               showToast("Prophecy revealed ᛗ", "success");
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `Analysis failed: ${error.message}`,
-              });
+              handleCommandError(error, `analyze ${symbol}`, addOutput);
             }
             break;
           }
@@ -2635,7 +2771,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             if (symbol === "TRENDING") {
               addOutput({
                 type: "info",
-                content: "ᛉ Analyzing sentiment for trending coins...",
+                content: getLoadingMessage(OperationType.ML_SENTIMENT, { asset: 'trending coins' }),
               });
 
               try {
@@ -2667,27 +2803,21 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 addOutput({ type: "success", content: result });
                 showToast("Trending sentiment analyzed", "success");
               } catch (error) {
-                addOutput({
-                  type: "error",
-                  content: `ᛪ Sentiment analysis failed: ${error.message}`,
-                });
+                handleCommandError(error, 'sentiment trending', addOutput);
               }
               break;
             }
 
-            const coinId = COIN_ID_MAP[symbol];
-
-            if (!coinId) {
-              addOutput({
-                type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
-              });
+            const validation = getCoinIdOrError(symbol, COIN_ID_MAP);
+            if (!validation.valid) {
+              addOutput({ type: "error", content: validation.error });
               break;
             }
+            const coinId = validation.coinId;
 
             addOutput({
               type: "info",
-              content: `ᛉ Analyzing ${symbol} market sentiment...`,
+              content: getLoadingMessage(OperationType.ML_SENTIMENT, { asset: symbol }),
             });
 
             try {
@@ -2750,11 +2880,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
               addOutput({ type: "success", content: result });
               showToast(`${symbol}: ${sentiment.sentiment}`, "success");
             } catch (error) {
-              addOutput({
-                type: "error",
-                content: `ᛪ Sentiment analysis failed: ${error.message}`,
-              });
-              console.error("Sentiment error:", error);
+              handleCommandError(error, `sentiment ${symbol}`, addOutput);
               showToast("Sentiment analysis failed", "error");
             }
             break;
