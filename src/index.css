@@ -26,6 +26,7 @@ body {
   /* Prevent horizontal scroll */
   body {
     overflow-x: hidden;
+    width: 100%;
   }
 
   /* Make terminal container responsive */
@@ -47,15 +48,33 @@ body {
     overflow-wrap: break-word !important;
   }
 
+  /* Better text wrapping for code blocks */
+  pre, code {
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100%;
+  }
+
   /* Adjust charts for mobile */
   .recharts-wrapper {
     max-width: 100% !important;
+  }
+
+  /* Ensure charts don't overflow */
+  .recharts-responsive-container {
+    min-width: 0 !important;
   }
 
   /* Make buttons touch-friendly */
   button {
     min-height: 44px !important;
     min-width: 44px !important;
+  }
+
+  /* Touch manipulation for better mobile interaction */
+  .touch-manipulation {
+    touch-action: manipulation;
   }
 
   /* Hide scrollbars but keep functionality */
@@ -66,6 +85,30 @@ body {
   ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.3);
     border-radius: 2px;
+  }
+
+  /* Prevent text selection on buttons/controls */
+  button, .control-button {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Better spacing for mobile lists */
+  ul, ol {
+    padding-left: 1.25rem !important;
+  }
+
+  /* Responsive tables */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Adjust modal padding for mobile */
+  .modal-content {
+    padding: 1rem !important;
+    margin: 0.5rem !important;
   }
 }
 

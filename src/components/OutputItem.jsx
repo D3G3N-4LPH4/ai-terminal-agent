@@ -16,7 +16,7 @@ const OutputItem = React.memo(({ item, theme }) => {
     <div
       className={`${
         colors[item.type]
-      } font-mono text-sm whitespace-pre-wrap mb-3 leading-relaxed animate-in fade-in duration-200`}
+      } font-mono text-xs sm:text-sm whitespace-pre-wrap mb-3 leading-relaxed animate-in fade-in duration-200 break-words overflow-wrap-anywhere`}
     >
       {item.content}
     </div>

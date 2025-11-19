@@ -4862,21 +4862,21 @@ Type "help" for commands`,
         ))}
       </div>
 
-      <div className={`w-full max-w-5xl mx-auto relative`}>
+      <div className={`w-full max-w-5xl mx-auto relative px-2 sm:px-4`}>
         <div
-          className={`bg-black/60 border-2 ${theme.border} rounded-2xl shadow-2xl ${theme.glow} backdrop-blur-xl overflow-hidden flex flex-col`}
-          style={{ height: "85vh", maxHeight: "900px" }}
+          className={`bg-black/60 border-2 ${theme.border} rounded-xl sm:rounded-2xl shadow-2xl ${theme.glow} backdrop-blur-xl overflow-hidden flex flex-col`}
+          style={{ height: "90vh", maxHeight: "900px", minHeight: "500px" }}
         >
           {/* Premium Header */}
           <div
-            className={`relative p-6 border-b-2 ${theme.border} ${theme.glass}`}
+            className={`relative p-3 sm:p-4 md:p-6 border-b-2 ${theme.border} ${theme.glass}`}
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${theme.bgAccent}`}>
-                  <span className="text-white text-2xl">𓃦</span>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`p-1.5 sm:p-2 rounded-lg ${theme.bgAccent}`}>
+                  <span className="text-white text-xl sm:text-2xl">𓃦</span>
                 </div>
-                <div>
+                <div className="hidden sm:block">
                   <h1 className={`${theme.text} text-xl font-bold`}>
                     ᚠᛖᚾᚱᛁᛦ 𖣂
                   </h1>
@@ -4885,29 +4885,29 @@ Type "help" for commands`,
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 sm:gap-3">
                 <span
-                  className={`text-sm px-3 py-1 ${theme.bgAccent} rounded-full text-white font-bold`}
+                  className={`text-xs sm:text-sm px-2 sm:px-3 py-1 ${theme.bgAccent} rounded-full text-white font-bold hidden md:inline-block`}
                 >
                   Ʉ₦₭₦Ø₩₦ ₵𝟬Đ𝟯
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <button
                     onClick={() => setShowAPIKeyModal(true)}
-                    className={`p-2 rounded-lg ${theme.glass} border ${theme.border} hover:bg-opacity-80`}
+                    className={`p-1.5 sm:p-2 rounded-lg ${theme.glass} border ${theme.border} hover:bg-opacity-80 touch-manipulation`}
                     title="API Keys"
                   >
-                    <Key size={18} className={theme.text} />
+                    <Key size={16} className={`${theme.text} sm:w-[18px] sm:h-[18px]`} />
                   </button>
                   <button
                     onClick={() => {
                       setInput("help");
                       inputRef.current?.focus();
                     }}
-                    className={`p-2 rounded-lg ${theme.glass} border ${theme.border} hover:bg-opacity-80`}
+                    className={`p-1.5 sm:p-2 rounded-lg ${theme.glass} border ${theme.border} hover:bg-opacity-80 touch-manipulation`}
                     title="Help"
                   >
-                    <Command size={18} className={theme.text} />
+                    <Command size={16} className={`${theme.text} sm:w-[18px] sm:h-[18px]`} />
                   </button>
                   <ThemeToggle
                     currentTheme={currentTheme}
@@ -4922,7 +4922,7 @@ Type "help" for commands`,
           <div
             ref={terminalRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar"
+            className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-2 custom-scrollbar"
           >
             {output.map((item) => (
               <OutputItem key={item.id} item={item} theme={theme} />
@@ -4939,10 +4939,10 @@ Type "help" for commands`,
           {!isAtBottom && (
             <button
               onClick={scrollToBottom}
-              className={`absolute right-8 bottom-40 p-3 rounded-full ${theme.bgAccent} ${theme.glow} hover:scale-110 transition-all duration-300 z-10 animate-bounce`}
+              className={`absolute right-4 sm:right-8 bottom-32 sm:bottom-40 p-2.5 sm:p-3 rounded-full ${theme.bgAccent} ${theme.glow} hover:scale-110 transition-all duration-300 z-10 animate-bounce touch-manipulation`}
               title="Scroll to bottom"
             >
-              <ArrowUp className="text-white rotate-180" size={20} />
+              <ArrowUp className="text-white rotate-180" size={18} />
             </button>
           )}
 
@@ -4996,13 +4996,14 @@ Type "help" for commands`,
                   </div>
                 )}
                 <span
-                  className={`${theme.accent} text-2xl font-bold animate-pulse`}
+                  className={`${theme.accent} text-xl sm:text-2xl font-bold animate-pulse`}
                 >
                   ❯
                 </span>
                 <input
                   ref={inputRef}
-                  className={`flex-1 bg-transparent ${theme.text} text-lg font-medium outline-none placeholder:text-gray-500`}
+                  className={`flex-1 bg-transparent ${theme.text} text-base sm:text-lg font-medium outline-none placeholder:text-gray-500`}
+                  style={{ fontSize: '16px' }}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -5013,10 +5014,10 @@ Type "help" for commands`,
                 {input && (
                   <button
                     type="submit"
-                    className={`px-6 py-3 rounded-xl ${theme.bgAccent} text-white font-bold hover:scale-105 transition-all duration-300 ${theme.glow} ${theme.glowHover}`}
+                    className={`px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl ${theme.bgAccent} text-white font-bold hover:scale-105 transition-all duration-300 ${theme.glow} ${theme.glowHover} touch-manipulation`}
                     disabled={isProcessing}
                   >
-                    <Zap size={20} />
+                    <Zap size={18} className="sm:w-5 sm:h-5" />
                   </button>
                 )}
               </div>
@@ -5025,12 +5026,12 @@ Type "help" for commands`,
 
           {/* Status Bar */}
           <div
-            className={`border-t ${theme.border} p-2 ${theme.glass} flex items-center justify-between text-xs`}
+            className={`border-t ${theme.border} p-2 sm:p-2.5 ${theme.glass} flex items-center justify-between text-xs`}
           >
-            <div className={`${theme.text} opacity-70`}>
+            <div className={`${theme.text} opacity-70 text-xs`}>
               {currentAIModel.split("/")[1]?.split("-")[0] || "claude"}
             </div>
-            <div className={`${theme.text} opacity-70`}>
+            <div className={`${theme.text} opacity-70 text-xs`}>
               {new Date().toLocaleTimeString()}
             </div>
           </div>
