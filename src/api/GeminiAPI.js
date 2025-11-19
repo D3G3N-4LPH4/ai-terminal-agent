@@ -4,7 +4,7 @@ import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
 
 export class GeminiAPI {
-  constructor(apiKey, model = 'gemini-1.5-flash') {
+  constructor(apiKey, model = 'gemini-1.5-flash-latest') {
     this.apiKey = apiKey;
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
     this.model = model;
@@ -111,8 +111,8 @@ export class GeminiAPI {
   // Get available models
   static getAvailableModels() {
     return [
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', speed: 'fast', free: true },
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', speed: 'medium', free: true },
+      { id: 'gemini-1.5-flash-latest', name: 'Gemini 1.5 Flash', speed: 'fast', free: true },
+      { id: 'gemini-1.5-pro-latest', name: 'Gemini 1.5 Pro', speed: 'medium', free: true },
       { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Experimental)', speed: 'fastest', free: true },
     ];
   }

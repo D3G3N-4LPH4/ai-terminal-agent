@@ -14,7 +14,6 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
   const [scraperKey, setScraperKey] = useState(API_CONFIG.scraperAPI?.apiKey || "");
   const [cmcKey, setCmcKey] = useState(API_CONFIG.coinMarketCap?.apiKey || "");
   const [santimentKey, setSantimentKey] = useState(API_CONFIG.santiment?.apiKey || "");
-  const [coinGeckoKey, setCoinGeckoKey] = useState(API_CONFIG.coinGecko?.apiKey || "");
   const [parallelKey, setParallelKey] = useState(API_CONFIG.parallel?.apiKey || "");
   const [showKeys, setShowKeys] = useState(false);
 
@@ -26,7 +25,6 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
     localStorage.setItem("scraper_api_key", scraperKey);
     localStorage.setItem("coinmarketcap_api_key", cmcKey);
     localStorage.setItem("santiment_api_key", santimentKey);
-    localStorage.setItem("coingecko_api_key", coinGeckoKey);
     localStorage.setItem("parallel_api_key", parallelKey);
 
     if (API_CONFIG.openRouter) API_CONFIG.openRouter.apiKey = openRouterKey;
@@ -36,12 +34,11 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
     if (API_CONFIG.scraperAPI) API_CONFIG.scraperAPI.apiKey = scraperKey;
     if (API_CONFIG.coinMarketCap) API_CONFIG.coinMarketCap.apiKey = cmcKey;
     if (API_CONFIG.santiment) API_CONFIG.santiment.apiKey = santimentKey;
-    if (API_CONFIG.coinGecko) API_CONFIG.coinGecko.apiKey = coinGeckoKey;
     if (API_CONFIG.parallel) API_CONFIG.parallel.apiKey = parallelKey;
 
     // Notify parent to reinitialize API instances
     if (onSave) {
-      onSave(openRouterKey, anthropicKey, groqKey, geminiKey, scraperKey, cmcKey, santimentKey, coinGeckoKey, parallelKey);
+      onSave(openRouterKey, anthropicKey, groqKey, geminiKey, scraperKey, cmcKey, santimentKey, parallelKey);
     }
 
     onClose();
@@ -269,30 +266,6 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
               value={santimentKey}
               onChange={(e) => setSantimentKey(e.target.value)}
               placeholder="Enter Santiment API key"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className={`${theme.text} block mb-2 font-semibold`}>
-              CoinGecko Pro API Key (Optional)
-            </label>
-            <p className="text-gray-400 text-sm mb-2">
-              Free tier works without key. For Pro features:{" "}
-              <a
-                href="https://www.coingecko.com/en/api/pricing"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:underline"
-              >
-                coingecko.com/api
-              </a>
-            </p>
-            <input
-              type={showKeys ? "text" : "password"}
-              value={coinGeckoKey}
-              onChange={(e) => setCoinGeckoKey(e.target.value)}
-              placeholder="Enter CoinGecko Pro API key (optional)"
               className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
             />
           </div>

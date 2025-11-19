@@ -35,16 +35,40 @@ const Dashboard = ({
   isVisible,
   onClose,
   theme,
-  coinGeckoAPI,
+  coinMarketCapAPI,
   sentimentAnalyzer,
   multiSourceSentiment,
   symbol = 'BTC',
-  coinId = 'bitcoin',
+  coinId = 'bitcoin', // Kept for compatibility but now uses symbol
 }) => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview'); // overview, sentiment, comparison
   const [refreshInterval, setRefreshInterval] = useState(null);
+
+  // Helper to get CMC historical data
+  const getCMCHistoricalData = async (symbol, days) => {
+    const timeEnd = Math.floor(Date.now() / 1000);
+    const timeStart = timeEnd - (days * 24 * 60 * 60);
+
+    let interval = "daily";
+    if (days <= 1) interval = "hourly";
+    else if (days <= 7) interval = "hourly";
+    else if (days <= 30) interval = "daily";
+    else interval = "weekly";
+
+    const data = await coinMarketCapAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, interval);
+
+    if (data && data.quotes) {
+      return {
+        prices: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.price]),
+        total_volumes: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.volume_24h || 0]),
+        market_caps: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.market_cap || 0])
+      };
+    }
+
+    return { prices: [], total_volumes: [], market_caps: [] };
+  };
 
   // Fetch dashboard data
   const fetchDashboardData = useCallback(async () => {
@@ -52,9 +76,9 @@ const Dashboard = ({
     try {
       // Fetch data in parallel
       const [priceData, marketData, sentimentData] = await Promise.allSettled([
-        coinGeckoAPI.getMarketChart(coinId, 30),
-        coinGeckoAPI.getCoinData(coinId),
-        multiSourceSentiment ? multiSourceSentiment.aggregateSentiment(symbol, coinId) : null,
+        getCMCHistoricalData(symbol, 30),
+        coinMarketCapAPI.getQuotes(symbol),
+        multiSourceSentiment ? multiSourceSentiment.aggregateSentiment(symbol) : null,
       ]);
 
       const data = {
@@ -69,7 +93,7 @@ const Dashboard = ({
     } finally {
       setLoading(false);
     }
-  }, [coinGeckoAPI, multiSourceSentiment, symbol, coinId]);
+  }, [coinMarketCapAPI, multiSourceSentiment, symbol]);
 
   // Initial fetch and setup auto-refresh
   useEffect(() => {

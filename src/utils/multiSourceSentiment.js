@@ -1,6 +1,7 @@
 // ==================== MULTI-SOURCE SENTIMENT AGGREGATION ====================
 // Aggregates sentiment data from multiple sources for comprehensive analysis
-// Sources: CoinGecko, Santiment, CoinMarketCap, Social Media, News
+// Sources: CoinMarketCap, Santiment, Social Media, News
+// Updated to use CoinMarketCap API
 
 /**
  * MultiSourceSentimentAggregator
@@ -10,11 +11,10 @@
  * - Social media sentiment (Twitter, Reddit mentions)
  * - News sentiment (web scraping)
  * - On-chain metrics (Santiment)
- * - Market metrics (CoinGecko, CoinMarketCap)
+ * - Market metrics (CoinMarketCap)
  */
 class MultiSourceSentimentAggregator {
   constructor(apis, sentimentAnalyzer) {
-    this.coinGeckoAPI = apis.coinGecko;
     this.santimentAPI = apis.santiment;
     this.coinMarketCapAPI = apis.coinMarketCap;
     this.webScraperAPI = apis.webScraper;
@@ -39,10 +39,9 @@ class MultiSourceSentimentAggregator {
   /**
    * Aggregate sentiment from all available sources
    * @param {string} symbol - Cryptocurrency symbol (e.g., 'BTC')
-   * @param {string} coinId - CoinGecko coin ID (e.g., 'bitcoin')
    */
-  async aggregateSentiment(symbol, coinId) {
-    const cacheKey = `${symbol}_${coinId}`;
+  async aggregateSentiment(symbol) {
+    const cacheKey = symbol;
 
     // Check cache
     if (this.cache.has(cacheKey)) {
@@ -61,11 +60,11 @@ class MultiSourceSentimentAggregator {
         newsData,
         marketData,
       ] = await Promise.allSettled([
-        this.fetchPriceSentiment(coinId),
-        this.fetchSocialSentiment(symbol, coinId),
+        this.fetchPriceSentiment(symbol),
+        this.fetchSocialSentiment(symbol),
         this.fetchOnchainSentiment(symbol),
         this.fetchNewsSentiment(symbol),
-        this.fetchMarketSentiment(coinId),
+        this.fetchMarketSentiment(symbol),
       ]);
 
       // Process results (handle rejections gracefully)
@@ -83,7 +82,6 @@ class MultiSourceSentimentAggregator {
       // Add metadata
       const result = {
         symbol,
-        coinId,
         timestamp: new Date().toISOString(),
         aggregate: aggregateResult,
         sources: sentiments,
@@ -107,24 +105,27 @@ class MultiSourceSentimentAggregator {
   /**
    * Fetch price-based sentiment (technical analysis)
    */
-  async fetchPriceSentiment(coinId) {
+  async fetchPriceSentiment(symbol) {
     try {
-      // Get historical price data
-      const priceData = await this.coinGeckoAPI.getHistoricalPrices(coinId, 30);
-      const currentData = await this.coinGeckoAPI.getPrice(coinId);
+      // Get historical price data from CMC
+      const timeEnd = Math.floor(Date.now() / 1000);
+      const timeStart = timeEnd - (30 * 24 * 60 * 60);
+      const priceData = await this.coinMarketCapAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, "daily");
+      const currentData = await this.coinMarketCapAPI.getQuotes(symbol);
+
+      const quote = currentData[symbol]?.quote?.USD;
+      const prices = priceData.quotes?.map(q => q.quote.USD.price) || [];
+      const volumes = priceData.quotes?.map(q => q.quote.USD.volume_24h) || [];
 
       // Calculate price changes
-      const prices = priceData.prices.map(p => p[1]);
-      const volumes = priceData.total_volumes.map(v => v[1]);
-
-      const priceChange24h = ((currentData.usd - prices[prices.length - 2]) / prices[prices.length - 2]) * 100;
-      const priceChange7d = ((currentData.usd - prices[prices.length - 7]) / prices[prices.length - 7]) * 100;
+      const priceChange24h = quote?.percent_change_24h || 0;
+      const priceChange7d = quote?.percent_change_7d || 0;
 
       // Use sentiment analyzer
       const sentiment = this.sentimentAnalyzer.analyzePriceSentiment({
-        currentPrice: currentData.usd,
+        currentPrice: quote?.price || 0,
         priceHistory: prices,
-        volume24h: currentData.usd_24h_vol || volumes[volumes.length - 1],
+        volume24h: quote?.volume_24h || volumes[volumes.length - 1] || 0,
         volumeHistory: volumes,
         priceChange24h,
         priceChange7d,
@@ -151,61 +152,19 @@ class MultiSourceSentimentAggregator {
 
   /**
    * Fetch social media sentiment
+   * Note: CMC doesn't provide community data, so this relies on other sources
    */
-  async fetchSocialSentiment(symbol, coinId) {
+  async fetchSocialSentiment(symbol) {
     try {
-      // Get CoinGecko community data
-      const coinData = await this.coinGeckoAPI.getCoinData(coinId);
-      const communityData = coinData.community_data || {};
-
-      // Calculate social score based on available metrics
-      let socialScore = 50; // Start neutral
-      const factors = [];
-
-      // Twitter followers (if available)
-      if (communityData.twitter_followers) {
-        const twitterScore = Math.min(20, Math.log10(communityData.twitter_followers) * 2);
-        socialScore += twitterScore;
-        factors.push(`Twitter: ${(communityData.twitter_followers / 1000).toFixed(0)}K followers (+${twitterScore.toFixed(0)})`);
-      }
-
-      // Reddit subscribers
-      if (communityData.reddit_subscribers) {
-        const redditScore = Math.min(15, Math.log10(communityData.reddit_subscribers) * 1.5);
-        socialScore += redditScore;
-        factors.push(`Reddit: ${(communityData.reddit_subscribers / 1000).toFixed(0)}K subscribers (+${redditScore.toFixed(0)})`);
-      }
-
-      // Telegram channel users
-      if (communityData.telegram_channel_user_count) {
-        const telegramScore = Math.min(10, Math.log10(communityData.telegram_channel_user_count) * 1);
-        socialScore += telegramScore;
-        factors.push(`Telegram: ${(communityData.telegram_channel_user_count / 1000).toFixed(0)}K users (+${telegramScore.toFixed(0)})`);
-      }
-
-      // Reddit activity (48h posts/comments)
-      if (communityData.reddit_average_posts_48h) {
-        const activityScore = Math.min(10, communityData.reddit_average_posts_48h / 5);
-        socialScore += activityScore;
-        factors.push(`Reddit activity: ${communityData.reddit_average_posts_48h} posts (+${activityScore.toFixed(0)})`);
-      }
-
-      // Normalize to 0-100
-      socialScore = Math.max(0, Math.min(100, socialScore));
-
-      let label;
-      if (socialScore >= 70) label = 'VERY POSITIVE';
-      else if (socialScore >= 55) label = 'POSITIVE';
-      else if (socialScore >= 45) label = 'NEUTRAL';
-      else if (socialScore >= 30) label = 'NEGATIVE';
-      else label = 'VERY NEGATIVE';
-
+      // CMC doesn't have social/community data like CoinGecko
+      // This would require external social media APIs (Twitter, Reddit, etc.)
+      // For now, return neutral with low confidence
       return {
-        score: socialScore,
-        label,
-        confidence: factors.length > 0 ? 75 : 30,
-        factors,
-        available: true,
+        score: 50,
+        label: 'NEUTRAL',
+        confidence: 0,
+        factors: ['Social data unavailable (requires external API)'],
+        available: false,
       };
     } catch (error) {
       return {
@@ -346,33 +305,40 @@ class MultiSourceSentimentAggregator {
   /**
    * Fetch market sentiment (liquidity, volume, market cap)
    */
-  async fetchMarketSentiment(coinId) {
+  async fetchMarketSentiment(symbol) {
     try {
-      const data = await this.coinGeckoAPI.getCoinData(coinId);
+      const data = await this.coinMarketCapAPI.getQuotes(symbol);
+      const quote = data[symbol]?.quote?.USD;
+
+      if (!quote) {
+        throw new Error('No market data available');
+      }
 
       let marketScore = 50;
       const factors = [];
 
       // Market cap rank (lower is better)
-      if (data.market_cap_rank) {
-        const rankScore = Math.max(0, 20 - (data.market_cap_rank / 10));
+      if (data[symbol]?.cmc_rank) {
+        const rank = data[symbol].cmc_rank;
+        const rankScore = Math.max(0, 20 - (rank / 10));
         marketScore += rankScore;
-        factors.push(`Rank #${data.market_cap_rank} (+${rankScore.toFixed(0)})`);
+        factors.push(`Rank #${rank} (+${rankScore.toFixed(0)})`);
       }
 
-      // Liquidity score
-      if (data.liquidity_score) {
-        const liquidityScore = data.liquidity_score * 15;
+      // Volume to market cap ratio (higher is better for liquidity)
+      if (quote.volume_24h && quote.market_cap) {
+        const volumeRatio = quote.volume_24h / quote.market_cap;
+        const liquidityScore = Math.min(15, volumeRatio * 100);
         marketScore += liquidityScore;
-        factors.push(`Liquidity: ${(data.liquidity_score * 100).toFixed(0)}% (+${liquidityScore.toFixed(0)})`);
+        factors.push(`Volume/MCap: ${(volumeRatio * 100).toFixed(2)}% (+${liquidityScore.toFixed(0)})`);
       }
 
       // Market cap change (24h)
-      if (data.market_data && data.market_data.market_cap_change_percentage_24h) {
-        const capChange = data.market_data.market_cap_change_percentage_24h;
+      if (quote.percent_change_24h) {
+        const capChange = quote.percent_change_24h;
         const capScore = Math.min(15, Math.max(-15, capChange));
         marketScore += capScore;
-        factors.push(`Market cap 24h: ${capChange > 0 ? '+' : ''}${capChange.toFixed(1)}% (${capScore > 0 ? '+' : ''}${capScore.toFixed(0)})`);
+        factors.push(`Price 24h: ${capChange > 0 ? '+' : ''}${capChange.toFixed(1)}% (${capScore > 0 ? '+' : ''}${capScore.toFixed(0)})`);
       }
 
       marketScore = Math.max(0, Math.min(100, marketScore));

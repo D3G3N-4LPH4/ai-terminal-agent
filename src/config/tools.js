@@ -185,6 +185,46 @@ const AVAILABLE_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_sentiment_analysis",
+      description:
+        "Get comprehensive multi-source sentiment analysis for a cryptocurrency. Aggregates sentiment from price action, market metrics, on-chain data, and social indicators. Returns overall sentiment score (0-100), sentiment label (VERY BULLISH/BULLISH/NEUTRAL/BEARISH/VERY BEARISH), confidence level, reliability score, and breakdown by source (price, market, onchain). Use this for sentiment-driven trading decisions and market psychology analysis.",
+      parameters: {
+        type: "object",
+        properties: {
+          symbol: {
+            type: "string",
+            description: "The cryptocurrency symbol (e.g., BTC, ETH, SOL)",
+          },
+        },
+        required: ["symbol"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_historical_prices",
+      description:
+        "Get historical price data for a cryptocurrency over a specified time period. Returns daily/hourly price points, volume, and market cap data. Useful for trend analysis, pattern recognition, and understanding price movements over time. Data includes timestamps, prices, volumes, and percentage changes.",
+      parameters: {
+        type: "object",
+        properties: {
+          symbol: {
+            type: "string",
+            description: "The cryptocurrency symbol (e.g., BTC, ETH, SOL)",
+          },
+          days: {
+            type: "number",
+            description: "Number of days of historical data to retrieve (1-365). Default: 30",
+          },
+        },
+        required: ["symbol"],
+      },
+    },
+  },
 ];
 
 export { AVAILABLE_TOOLS, COIN_ID_MAP };

@@ -1,10 +1,11 @@
 // ==================== ALERT SYSTEM ====================
 // Real-time monitoring and notifications for price, pattern, and sentiment changes
 // Uses background polling and browser notifications
+// Updated to use CoinMarketCap API
 
 export class AlertManager {
-  constructor(coinGeckoAPI, mlServices) {
-    this.coinGeckoAPI = coinGeckoAPI;
+  constructor(coinMarketCapAPI, mlServices) {
+    this.coinMarketCapAPI = coinMarketCapAPI;
     this.mlServices = mlServices;
     this.alerts = [];
     this.alertIdCounter = 1;
@@ -161,9 +162,10 @@ export class AlertManager {
     const { coinId, symbol, condition, threshold } = alert;
 
     try {
-      // Fetch current price
-      const data = await this.coinGeckoAPI.getPrice(coinId);
-      const currentPrice = data.usd;
+      // Fetch current price from CMC
+      const data = await this.coinMarketCapAPI.getQuotes(symbol);
+      const quote = data[symbol]?.quote?.USD;
+      const currentPrice = quote?.price || 0;
 
       let triggered = false;
 
@@ -204,9 +206,11 @@ export class AlertManager {
     }
 
     try {
-      // Fetch price data
-      const chartData = await this.coinGeckoAPI.getMarketChart(coinId, 60);
-      const prices = chartData.prices.map(p => p[1]);
+      // Fetch price data from CMC
+      const timeEnd = Math.floor(Date.now() / 1000);
+      const timeStart = timeEnd - (60 * 24 * 60 * 60); // 60 days
+      const data = await this.coinMarketCapAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, "daily");
+      const prices = data.quotes?.map(q => q.quote.USD.price) || [];
 
       // Recognize patterns
       const result = this.mlServices.patternRecognizer.recognizePatterns(prices);
@@ -239,17 +243,21 @@ export class AlertManager {
     }
 
     try {
-      // Fetch market data
-      const data = await this.coinGeckoAPI.getPrice(coinId);
-      const chartData = await this.coinGeckoAPI.getMarketChart(coinId, 30);
+      // Fetch market data from CMC
+      const data = await this.coinMarketCapAPI.getQuotes(symbol);
+      const quote = data[symbol]?.quote?.USD;
+
+      const timeEnd = Math.floor(Date.now() / 1000);
+      const timeStart = timeEnd - (30 * 24 * 60 * 60);
+      const chartData = await this.coinMarketCapAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, "daily");
 
       const marketData = {
-        currentPrice: data.usd,
-        priceHistory: chartData.prices.map(p => p[1]),
-        volumeHistory: chartData.total_volumes ? chartData.total_volumes.map(v => v[1]) : null,
-        volume24h: data.usd_24h_vol || 0,
-        priceChange24h: data.usd_24h_change || 0,
-        priceChange7d: data.usd_7d_change || 0,
+        currentPrice: quote?.price || 0,
+        priceHistory: chartData.quotes?.map(q => q.quote.USD.price) || [],
+        volumeHistory: chartData.quotes?.map(q => q.quote.USD.volume_24h) || [],
+        volume24h: quote?.volume_24h || 0,
+        priceChange24h: quote?.percent_change_24h || 0,
+        priceChange7d: quote?.percent_change_7d || 0,
       };
 
       const sentiment = this.mlServices.sentimentAnalyzer.analyzePriceSentiment(marketData);
@@ -278,15 +286,19 @@ export class AlertManager {
     }
 
     try {
-      // Fetch market data
-      const data = await this.coinGeckoAPI.getPrice(coinId);
-      const chartData = await this.coinGeckoAPI.getMarketChart(coinId, 30);
+      // Fetch market data from CMC
+      const data = await this.coinMarketCapAPI.getQuotes(symbol);
+      const quote = data[symbol]?.quote?.USD;
+
+      const timeEnd = Math.floor(Date.now() / 1000);
+      const timeStart = timeEnd - (30 * 24 * 60 * 60);
+      const chartData = await this.coinMarketCapAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, "daily");
 
       const marketData = {
-        currentPrice: data.usd,
-        priceHistory: chartData.prices.map(p => p[1]),
-        volumeHistory: chartData.total_volumes ? chartData.total_volumes.map(v => v[1]) : null,
-        volume24h: data.usd_24h_vol || 0,
+        currentPrice: quote?.price || 0,
+        priceHistory: chartData.quotes?.map(q => q.quote.USD.price) || [],
+        volumeHistory: chartData.quotes?.map(q => q.quote.USD.volume_24h) || [],
+        volume24h: quote?.volume_24h || 0,
       };
 
       const anomalies = this.mlServices.anomalyDetector.analyzeAnomalies(marketData);

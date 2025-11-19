@@ -1,6 +1,7 @@
 // ==================== MULTI-TIMEFRAME ANALYSIS ====================
 // Compare asset performance across multiple time periods
 // Analyze momentum, correlation, and seasonality patterns
+// Updated to use CoinMarketCap API
 
 export class MultiTimeframeAnalyzer {
   constructor() {
@@ -13,9 +14,31 @@ export class MultiTimeframeAnalyzer {
     };
   }
 
+  // Helper to get CMC historical data
+  async getCMCHistoricalData(cmcAPI, symbol, days) {
+    const timeEnd = Math.floor(Date.now() / 1000);
+    const timeStart = timeEnd - (days * 24 * 60 * 60);
+
+    let interval = "daily";
+    if (days <= 1) interval = "hourly";
+    else if (days <= 7) interval = "hourly";
+    else if (days <= 30) interval = "daily";
+    else interval = "weekly";
+
+    const data = await cmcAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, interval);
+
+    if (data && data.quotes) {
+      return {
+        prices: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.price])
+      };
+    }
+
+    return { prices: [] };
+  }
+
   // ==================== COMPARE TIMEFRAMES ====================
 
-  async compareTimeframes(coinGeckoAPI, coinId, timeframes = ['1d', '7d', '30d', '90d']) {
+  async compareTimeframes(coinMarketCapAPI, symbol, timeframes = ['1d', '7d', '30d', '90d']) {
     const results = {};
 
     for (const tf of timeframes) {
@@ -23,7 +46,7 @@ export class MultiTimeframeAnalyzer {
       if (!config) continue;
 
       try {
-        const data = await coinGeckoAPI.getMarketChart(coinId, config.days);
+        const data = await this.getCMCHistoricalData(coinMarketCapAPI, symbol, config.days);
         const prices = data.prices.map(p => p[1]);
 
         if (prices.length < 2) continue;
@@ -57,48 +80,48 @@ export class MultiTimeframeAnalyzer {
 
   // ==================== CORRELATION ANALYSIS ====================
 
-  async analyzeCorrelation(coinGeckoAPI, coinIds, days = 30) {
+  async analyzeCorrelation(coinMarketCapAPI, symbols, days = 30) {
     const priceData = {};
 
     // Fetch price data for all coins
-    for (const coinId of coinIds) {
+    for (const symbol of symbols) {
       try {
-        const data = await coinGeckoAPI.getMarketChart(coinId, days);
-        priceData[coinId] = data.prices.map(p => p[1]);
+        const data = await this.getCMCHistoricalData(coinMarketCapAPI, symbol, days);
+        priceData[symbol] = data.prices.map(p => p[1]);
       } catch (error) {
-        console.error(`Failed to fetch ${coinId}:`, error);
+        console.error(`Failed to fetch ${symbol}:`, error);
       }
     }
 
     // Calculate correlation matrix
     const correlations = {};
-    const coinIdArray = Object.keys(priceData);
+    const symbolArray = Object.keys(priceData);
 
-    for (let i = 0; i < coinIdArray.length; i++) {
-      const coin1 = coinIdArray[i];
-      correlations[coin1] = {};
+    for (let i = 0; i < symbolArray.length; i++) {
+      const symbol1 = symbolArray[i];
+      correlations[symbol1] = {};
 
-      for (let j = 0; j < coinIdArray.length; j++) {
-        const coin2 = coinIdArray[j];
+      for (let j = 0; j < symbolArray.length; j++) {
+        const symbol2 = symbolArray[j];
 
         if (i === j) {
-          correlations[coin1][coin2] = 1.0;
+          correlations[symbol1][symbol2] = 1.0;
         } else {
           const corr = this.calculateCorrelation(
-            priceData[coin1],
-            priceData[coin2]
+            priceData[symbol1],
+            priceData[symbol2]
           );
-          correlations[coin1][coin2] = corr;
+          correlations[symbol1][symbol2] = corr;
         }
       }
     }
 
-    return { correlations, coinIds: coinIdArray };
+    return { correlations, coinIds: symbolArray };
   }
 
   // ==================== MOMENTUM ANALYSIS ====================
 
-  async analyzeMomentum(coinGeckoAPI, coinId, timeframes = ['1d', '7d', '30d']) {
+  async analyzeMomentum(coinMarketCapAPI, symbol, timeframes = ['1d', '7d', '30d']) {
     const momentum = {};
 
     for (const tf of timeframes) {
@@ -106,7 +129,7 @@ export class MultiTimeframeAnalyzer {
       if (!config) continue;
 
       try {
-        const data = await coinGeckoAPI.getMarketChart(coinId, config.days);
+        const data = await this.getCMCHistoricalData(coinMarketCapAPI, symbol, config.days);
         const prices = data.prices.map(p => p[1]);
 
         // Calculate ROC (Rate of Change)
@@ -152,9 +175,9 @@ export class MultiTimeframeAnalyzer {
 
   // ==================== SEASONALITY ANALYSIS ====================
 
-  async analyzeSeasonality(coinGeckoAPI, coinId) {
+  async analyzeSeasonality(coinMarketCapAPI, symbol) {
     // Fetch 1 year of data
-    const data = await coinGeckoAPI.getMarketChart(coinId, 365);
+    const data = await this.getCMCHistoricalData(coinMarketCapAPI, symbol, 365);
     const prices = data.prices;
 
     // Group by month

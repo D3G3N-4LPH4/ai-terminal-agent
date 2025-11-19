@@ -39,7 +39,6 @@ import { useFenrirAgent } from "./useFenrirAgent";
 // Import API classes
 import {
   OpenRouterAPI,
-  CoinGeckoAPI,
   WebScraperAPI,
   ScraperAPI,
   CoinMarketCapAPI,
@@ -47,7 +46,6 @@ import {
   ParallelAPI,
   MCPAPI,
 } from "./api";
-import CoinGeckoMCP from "./api/CoinGeckoMCP";
 import { AIFallbackOrchestrator } from "./api/AIFallbackOrchestrator";
 
 // Import configuration
@@ -175,19 +173,6 @@ const API_CONFIG = {
     // Direct API (will fail due to CORS): "https://api.scraperapi.com"
     apiKey: localStorage.getItem("scraper_api_key") || "",
   },
-  coinGecko: {
-    baseUrl: "https://api.coingecko.com/api/v3",
-    proBaseUrl: "https://pro-api.coingecko.com/api/v3",
-    // CoinGecko supports CORS - works directly in browser!
-    apiKey: localStorage.getItem("coingecko_api_key") || "",
-  },
-  coinGeckoMCP: {
-    // Using backend proxy for MCP (Model Context Protocol)
-    baseUrl: `${BACKEND_URL}`,
-    // Remote keyless MCP: "https://mcp.api.coingecko.com/mcp"
-    // Pro MCP: "https://mcp.pro-api.coingecko.com/mcp"
-    apiKey: localStorage.getItem("coingecko_api_key") || "", // Optional - for Pro tier
-  },
   coinMarketCap: {
     // Using backend proxy to avoid CORS issues
     baseUrl: `${BACKEND_URL}/api/cmc`,
@@ -224,6 +209,8 @@ if (typeof window !== 'undefined') {
 const STORAGE_KEY = "ai-agent-state-v4";
 const THEME_STORAGE_KEY = "ai-agent-theme";
 const HISTORY_STORAGE_KEY = "ai-agent-history";
+const CONVERSATION_STORAGE_KEY = "ai-agent-conversation";
+const CONVERSATION_METADATA_KEY = "ai-agent-conversation-meta";
 
 const COMMAND_SUGGESTIONS = [
   { cmd: "price BTC", desc: "Get real crypto prices", category: "trading" },
@@ -288,20 +275,59 @@ function debounce(func, delay) {
 
 // ==================== API HELPERS ====================
 // API classes have been moved to src/api/ directory
-// (DuneAPI, OpenRouterAPI, CoinGeckoAPI, WebScraperAPI, ScraperAPI, HeliusAPI, CoinMarketCapAPI, SantimentAPI, ParallelAPI)
-// Symbol mapping for CoinGecko
-const COIN_ID_MAP = {
-  BTC: "bitcoin",
-  ETH: "ethereum",
-  SOL: "solana",
-  USDT: "tether",
-  BNB: "binancecoin",
-  XRP: "ripple",
-  ADA: "cardano",
-  DOGE: "dogecoin",
-  MATIC: "matic-network",
-  DOT: "polkadot",
+// (OpenRouterAPI, WebScraperAPI, ScraperAPI, CoinMarketCapAPI, SantimentAPI, ParallelAPI)
+// Symbol mapping for CoinMarketCap (CMC uses symbols directly)
+const COIN_SYMBOL_MAP = {
+  BTC: "BTC",
+  ETH: "ETH",
+  SOL: "SOL",
+  USDT: "USDT",
+  BNB: "BNB",
+  XRP: "XRP",
+  ADA: "ADA",
+  DOGE: "DOGE",
+  MATIC: "MATIC",
+  DOT: "DOT",
+  AVAX: "AVAX",
+  LINK: "LINK",
+  UNI: "UNI",
+  ATOM: "ATOM",
 };
+
+// Helper function to convert symbol to CMC format and check validity
+function getSymbolOrError(symbol) {
+  const upperSymbol = symbol.toUpperCase();
+  if (COIN_SYMBOL_MAP[upperSymbol]) {
+    return { symbol: COIN_SYMBOL_MAP[upperSymbol], error: null };
+  }
+  return { symbol: null, error: `Unknown cryptocurrency: ${symbol}` };
+}
+
+// Helper to get CMC historical data (converts days to timestamp format)
+async function getCMCHistoricalData(cmcAPI, symbol, days) {
+  const timeEnd = Math.floor(Date.now() / 1000); // Current time in seconds
+  const timeStart = timeEnd - (days * 24 * 60 * 60); // Days ago in seconds
+
+  // Determine interval based on days
+  let interval = "daily";
+  if (days <= 1) interval = "hourly";
+  else if (days <= 7) interval = "hourly";
+  else if (days <= 30) interval = "daily";
+  else interval = "weekly";
+
+  const data = await cmcAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, interval);
+
+  // Convert CMC format to array format similar to CoinGecko's market_chart
+  // CMC returns: { quotes: [{timestamp, quote: {USD: {price, volume_24h, ...}}}] }
+  if (data && data.quotes) {
+    return {
+      prices: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.price]),
+      volumes: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.volume_24h || 0])
+    };
+  }
+
+  return { prices: [], volumes: [] };
+}
 
 // ==================== TOOL DEFINITIONS FOR AI ====================
 
@@ -326,7 +352,37 @@ export default function AITerminalAgent() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardSymbol, setDashboardSymbol] = useState('BTC');
   const [dashboardCoinId, setDashboardCoinId] = useState('bitcoin');
-  const [conversationHistory, setConversationHistory] = useState([]);
+  const [conversationHistory, setConversationHistory] = useState(() => {
+    // Load conversation history from localStorage on init
+    try {
+      const saved = localStorage.getItem(CONVERSATION_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to load conversation history:', e);
+      return [];
+    }
+  });
+  const [conversationMetadata, setConversationMetadata] = useState(() => {
+    // Load conversation metadata (topics, user preferences, etc.)
+    try {
+      const saved = localStorage.getItem(CONVERSATION_METADATA_KEY);
+      return saved ? JSON.parse(saved) : {
+        topics: [],
+        userName: null,
+        preferences: {},
+        startedAt: new Date().toISOString(),
+        messageCount: 0,
+      };
+    } catch (e) {
+      return {
+        topics: [],
+        userName: null,
+        preferences: {},
+        startedAt: new Date().toISOString(),
+        messageCount: 0,
+      };
+    }
+  });
   const [showAgentReasoning, setShowAgentReasoning] = useState(true);
   const [useLangGraphAgent, setUseLangGraphAgent] = useState(true);
 
@@ -334,8 +390,6 @@ export default function AITerminalAgent() {
   const inputRef = useRef(null);
   const openRouterAPI = useRef(null);
   const aiFallback = useRef(null); // AI Fallback Orchestrator
-  const coinGeckoAPI = useRef(null);
-  const coinGeckoMCP = useRef(null);
   const scraperAPI = useRef(null);
   const scraperAPIAdvanced = useRef(null);
   const coinMarketCapAPI = useRef(null);
@@ -378,12 +432,6 @@ export default function AITerminalAgent() {
     scraperAPIAdvanced.current = new ScraperAPI(API_CONFIG.scraperAPI.apiKey);
     coinMarketCapAPI.current = new CoinMarketCapAPI(API_CONFIG.coinMarketCap.apiKey);
     santimentAPI.current = new SantimentAPI(API_CONFIG.santiment.apiKey);
-    coinGeckoAPI.current = new CoinGeckoAPI(
-      API_CONFIG.coinGecko.apiKey,
-      API_CONFIG.coinGecko.baseUrl,
-      API_CONFIG.coinGecko.proBaseUrl
-    );
-    coinGeckoMCP.current = new CoinGeckoMCP(API_CONFIG.coinGeckoMCP.apiKey);
     parallelAPI.current = new ParallelAPI(API_CONFIG.parallel.apiKey);
     mcpAPI.current = new MCPAPI();
 
@@ -400,7 +448,7 @@ export default function AITerminalAgent() {
         patternRecognizer.current = new PatternRecognizer(mlService.current);
 
         // Initialize alert manager with ML services
-        alertManager.current = new AlertManager(coinGeckoAPI.current, {
+        alertManager.current = new AlertManager(coinMarketCapAPI.current, {
           sentimentAnalyzer: sentimentAnalyzer.current,
           anomalyDetector: anomalyDetector.current,
           patternRecognizer: patternRecognizer.current,
@@ -408,9 +456,8 @@ export default function AITerminalAgent() {
 
         // Initialize multi-source sentiment aggregator
         multiSourceSentiment.current = new MultiSourceSentimentAggregator({
-          coinGecko: coinGeckoAPI.current,
-          santiment: santimentAPI.current,
           coinMarketCap: coinMarketCapAPI.current,
+          santiment: santimentAPI.current,
           webScraper: scraperAPI.current,
         }, sentimentAnalyzer.current);
 
@@ -462,20 +509,25 @@ export default function AITerminalAgent() {
       switch (toolName) {
         case "get_crypto_price": {
           const symbol = toolArgs.symbol.toUpperCase();
-          const coinId = COIN_ID_MAP[symbol];
 
-          if (!coinId) {
+          if (!COIN_SYMBOL_MAP[symbol]) {
             return { error: `Unknown cryptocurrency symbol: ${symbol}` };
           }
 
-          const data = await coinGeckoAPI.current.getPrice(coinId);
-          const priceData = data[coinId];
+          const data = await coinMarketCapAPI.current.getQuotes(symbol);
+          const priceData = data[symbol];
 
+          if (!priceData) {
+            return { error: `Could not retrieve price data for ${symbol}` };
+          }
+
+          const quote = priceData.quote.USD;
           return {
             symbol: symbol,
-            price: priceData.usd,
-            change_24h: priceData.usd_24h_change,
-            volume_24h: priceData.usd_24h_vol,
+            price: quote.price,
+            change_24h: quote.percent_change_24h,
+            volume_24h: quote.volume_24h,
+            market_cap: quote.market_cap,
             currency: "USD",
           };
         }
@@ -483,43 +535,41 @@ export default function AITerminalAgent() {
         case "search_crypto_assets": {
           const query = toolArgs.query.toLowerCase();
 
-          // Search in COIN_ID_MAP
-          const matches = Object.entries(COIN_ID_MAP)
-            .filter(
-              ([symbol, id]) =>
-                symbol.toLowerCase().includes(query) ||
-                id.toLowerCase().includes(query)
-            )
-            .map(([symbol]) => symbol);
+          // Get top 200 coins from CMC for comprehensive search
+          const allCoins = await coinMarketCapAPI.current.getListings(200, 1);
+
+          // Search through names and symbols
+          const matches = allCoins.filter(coin =>
+            coin.name.toLowerCase().includes(query) ||
+            coin.symbol.toLowerCase().includes(query)
+          ).slice(0, 5);
 
           if (matches.length === 0) {
             return { error: `No cryptocurrencies found matching: ${query}` };
           }
 
-          // Get prices for matches (limit to 5)
-          const coinIds = matches.slice(0, 5).map((s) => COIN_ID_MAP[s]);
-          const priceData = await coinGeckoAPI.current.getPrice(coinIds);
-
-          const results = matches.slice(0, 5).map((symbol) => {
-            const coinId = COIN_ID_MAP[symbol];
-            const data = priceData[coinId];
+          const results = matches.map((coin) => {
+            const quote = coin.quote?.USD;
             return {
-              symbol: symbol,
-              name: coinId,
-              price: data?.usd || 0,
-              change_24h: data?.usd_24h_change || 0,
+              symbol: coin.symbol,
+              name: coin.name,
+              price: quote?.price || 0,
+              change_24h: quote?.percent_change_24h || 0,
+              market_cap: quote?.market_cap || 0,
+              rank: coin.cmc_rank,
             };
           });
 
           return {
             query: query,
             results: results,
+            total_searched: allCoins.length,
           };
         }
 
         case "get_onchain_metrics": {
           const symbol = toolArgs.symbol.toUpperCase();
-          const coinId = COIN_ID_MAP[symbol];
+          const coinId = COIN_SYMBOL_MAP[symbol];
 
           if (!coinId) {
             return { error: `Unknown cryptocurrency symbol: ${symbol}` };
@@ -546,44 +596,50 @@ export default function AITerminalAgent() {
         }
 
         case "get_trending_coins": {
-          const data = await coinGeckoAPI.current.getTrending();
-          const trending = data.coins.slice(0, 7);
+          const data = await coinMarketCapAPI.current.getTrending();
+          const trending = Array.isArray(data) ? data.slice(0, 7) : [];
 
-          const results = trending.map((item) => {
-            const coin = item.item;
+          const results = trending.map((coin) => {
+            const quote = coin.quote?.USD;
             return {
               name: coin.name,
               symbol: coin.symbol,
-              rank: coin.market_cap_rank || "N/A",
-              price: coin.data?.price || "N/A",
-              change_24h: coin.data?.price_change_percentage_24h?.usd || 0,
+              rank: coin.cmc_rank || "N/A",
+              price: quote?.price || "N/A",
+              change_24h: quote?.percent_change_24h || 0,
             };
           });
 
           return {
             trending_coins: results,
-            description: "These are the hottest cryptocurrencies based on current search activity and social buzz",
+            description: "These are the hottest cryptocurrencies based on current search activity and market activity",
           };
         }
 
         case "get_market_movers": {
-          const data = await coinGeckoAPI.current.getTopGainersLosers();
+          const data = await coinMarketCapAPI.current.getGainersLosers();
 
-          const gainers = data.gainers.slice(0, 5).map((coin) => ({
-            name: coin.name,
-            symbol: coin.symbol.toUpperCase(),
-            price: coin.current_price,
-            change_24h: coin.price_change_percentage_24h,
-            rank: coin.market_cap_rank,
-          }));
+          const gainers = (data.gainers || []).slice(0, 5).map((coin) => {
+            const quote = coin.quote?.USD;
+            return {
+              name: coin.name,
+              symbol: coin.symbol,
+              price: quote?.price || 0,
+              change_24h: quote?.percent_change_24h || 0,
+              rank: coin.cmc_rank,
+            };
+          });
 
-          const losers = data.losers.slice(0, 5).map((coin) => ({
-            name: coin.name,
-            symbol: coin.symbol.toUpperCase(),
-            price: coin.current_price,
-            change_24h: coin.price_change_percentage_24h,
-            rank: coin.market_cap_rank,
-          }));
+          const losers = (data.losers || []).slice(0, 5).map((coin) => {
+            const quote = coin.quote?.USD;
+            return {
+              name: coin.name,
+              symbol: coin.symbol,
+              price: quote?.price || 0,
+              change_24h: quote?.percent_change_24h || 0,
+              rank: coin.cmc_rank,
+            };
+          });
 
           return {
             top_gainers: gainers,
@@ -593,26 +649,23 @@ export default function AITerminalAgent() {
         }
 
         case "get_category_info": {
-          const category = toolArgs.category.toLowerCase();
-          const coins = await coinGeckoAPI.current.getCategoryCoins(category);
-
-          if (coins.length === 0) {
-            return { error: `No coins found in category: ${category}` };
-          }
-
-          const results = coins.slice(0, 10).map((coin) => ({
-            name: coin.name,
-            symbol: coin.symbol.toUpperCase(),
-            price: coin.current_price,
-            change_24h: coin.price_change_percentage_24h,
-            market_cap: coin.market_cap,
-            rank: coin.market_cap_rank,
-          }));
-
+          // Note: CMC doesn't have direct category filtering like CoinGecko
+          // This tool returns a helpful error message directing users to alternatives
           return {
-            category: category,
-            coins: results,
-            description: `Top cryptocurrencies in the ${category} category`,
+            error: `Category filtering is not available through CoinMarketCap. Try these alternatives:
+
+• Use "search_crypto_assets" to search for specific coins
+• Use "get_trending_coins" to see what's hot right now
+• Use "get_market_movers" to see biggest gainers/losers
+• Use "web_search" with a query like "best DeFi tokens 2024" for category research
+
+Category requested: ${toolArgs.category || 'none'}`,
+            alternatives: {
+              search: "search_crypto_assets",
+              trending: "get_trending_coins",
+              movers: "get_market_movers",
+              research: "web_search"
+            }
           };
         }
 
@@ -815,6 +868,96 @@ export default function AITerminalAgent() {
           }
         }
 
+        case "get_sentiment_analysis": {
+          const symbol = toolArgs.symbol.toUpperCase();
+
+          if (!multiSourceSentiment.current) {
+            return {
+              error: "Sentiment analysis not initialized. This feature requires the multi-source sentiment system.",
+            };
+          }
+
+          const result = await multiSourceSentiment.current.aggregateSentiment(symbol);
+
+          return {
+            symbol,
+            overall_sentiment: result.aggregate.label,
+            score: result.aggregate.score,
+            confidence: result.aggregate.confidence,
+            reliability: result.reliability,
+            sources_used: result.aggregate.availableSources,
+            source_count: result.aggregate.sourceCount,
+            breakdown: {
+              price_sentiment: result.sources.price?.label || "N/A",
+              price_score: result.sources.price?.score || 0,
+              market_sentiment: result.sources.market?.label || "N/A",
+              market_score: result.sources.market?.score || 0,
+              onchain_sentiment: result.sources.onchain?.label || "N/A",
+              onchain_score: result.sources.onchain?.score || 0,
+            },
+            interpretation: `${symbol} shows ${result.aggregate.label} sentiment with ${result.aggregate.confidence}% confidence based on ${result.aggregate.sourceCount} data sources. Reliability: ${result.reliability}%`,
+          };
+        }
+
+        case "get_historical_prices": {
+          const symbol = toolArgs.symbol.toUpperCase();
+          const days = Math.min(Math.max(toolArgs.days || 30, 1), 365);
+
+          if (!COIN_SYMBOL_MAP[symbol]) {
+            return { error: `Unknown cryptocurrency symbol: ${symbol}` };
+          }
+
+          const timeEnd = Math.floor(Date.now() / 1000);
+          const timeStart = timeEnd - (days * 24 * 60 * 60);
+
+          // Determine interval based on timeframe
+          let interval = "daily";
+          if (days <= 1) interval = "hourly";
+          else if (days <= 7) interval = "hourly";
+          else if (days <= 90) interval = "daily";
+          else interval = "weekly";
+
+          const data = await coinMarketCapAPI.current.getHistoricalQuotes(symbol, timeStart, timeEnd, interval);
+
+          if (!data || !data.quotes || data.quotes.length === 0) {
+            return { error: `No historical data available for ${symbol}` };
+          }
+
+          const prices = data.quotes.map(q => ({
+            timestamp: q.timestamp * 1000,
+            date: new Date(q.timestamp * 1000).toISOString(),
+            price: q.quote.USD.price,
+            volume: q.quote.USD.volume_24h || 0,
+            market_cap: q.quote.USD.market_cap || 0,
+          }));
+
+          // Calculate statistics
+          const priceValues = prices.map(p => p.price);
+          const currentPrice = priceValues[priceValues.length - 1];
+          const firstPrice = priceValues[0];
+          const percentChange = ((currentPrice - firstPrice) / firstPrice) * 100;
+          const highPrice = Math.max(...priceValues);
+          const lowPrice = Math.min(...priceValues);
+
+          return {
+            symbol,
+            period_days: days,
+            interval,
+            data_points: prices.length,
+            prices: prices,
+            statistics: {
+              current_price: currentPrice,
+              period_start_price: firstPrice,
+              percent_change: percentChange,
+              high: highPrice,
+              low: lowPrice,
+              range: highPrice - lowPrice,
+              average: priceValues.reduce((a, b) => a + b, 0) / priceValues.length,
+            },
+            trend: percentChange > 5 ? "bullish" : percentChange < -5 ? "bearish" : "neutral",
+          };
+        }
+
         default:
           return { error: `Unknown tool: ${toolName}` };
       }
@@ -826,23 +969,25 @@ export default function AITerminalAgent() {
 
   // Handler to reinitialize API instances when keys are updated
   const handleAPIKeysSaved = useCallback(
-    (openRouterKey, scraperKey, cmcKey, santimentKey, coinGeckoKey, parallelKey) => {
+    (openRouterKey, anthropicKey, groqKey, geminiKey, scraperKey, cmcKey, santimentKey, parallelKey) => {
       openRouterAPI.current = new OpenRouterAPI(
         openRouterKey,
         API_CONFIG.openRouter.baseUrl,
         API_CONFIG.openRouter.defaultModel
       );
+
+      // Reinitialize AI Fallback Orchestrator with new keys
+      API_CONFIG.anthropic.apiKey = anthropicKey;
+      API_CONFIG.groq.apiKey = groqKey;
+      API_CONFIG.gemini.apiKey = geminiKey;
+      aiFallback.current = new AIFallbackOrchestrator(API_CONFIG);
+
       scraperAPI.current = new WebScraperAPI();
       scraperAPIAdvanced.current = new ScraperAPI(scraperKey);
       coinMarketCapAPI.current = new CoinMarketCapAPI(cmcKey);
       santimentAPI.current = new SantimentAPI(santimentKey);
-      coinGeckoAPI.current = new CoinGeckoAPI(
-        coinGeckoKey,
-        API_CONFIG.coinGecko.baseUrl,
-        API_CONFIG.coinGecko.proBaseUrl
-      );
-      coinGeckoMCP.current = new CoinGeckoMCP(coinGeckoKey);
       parallelAPI.current = new ParallelAPI(parallelKey);
+
       if (openRouterKey) {
         openRouterAPI.current.setModel(currentAIModel);
       }
@@ -983,13 +1128,13 @@ export default function AITerminalAgent() {
 ᚠ Ʉ₦₭₦Ø₩₦ ₵𝟬Đ𝟯 ─ FENRIR'S GRIMOIRE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-ᚠ MARKET ORACLE (CoinGecko - FREE)
+ᚠ MARKET ORACLE (CoinMarketCap - Pro)
   price [symbol]               - Divine real-time prices
   market [symbol]              - Delve into market depths
   global                       - Survey all nine realms
   trending                     - Track hottest coins
   movers                       - See top gainers/losers
-  categories [id]              - Explore themed sectors
+  categories                   - Top coins by market cap
   fear                         - Fear & Greed Index
 
 ᛉ WEB RESEARCH
@@ -1053,7 +1198,7 @@ export default function AITerminalAgent() {
   help                         - Summon this grimoire
 
 ᛗ New here? Run 'apikeys' to begin your journey
-ᛏ Free access: CoinGecko & ML commands work immediately
+ᛏ Free access: ML commands work immediately
 ᛪ Backend needed: CoinMarketCap, Helius, Dune, ScraperAPI
             `,
             });
@@ -1074,7 +1219,6 @@ export default function AITerminalAgent() {
             const scraperConfigured = !!API_CONFIG.scraperAPI.apiKey;
             const cmcConfigured = !!API_CONFIG.coinMarketCap.apiKey;
             const santimentConfigured = !!API_CONFIG.santiment.apiKey;
-            const coinGeckoConfigured = !!API_CONFIG.coinGecko.apiKey;
             const parallelConfigured = !!API_CONFIG.parallel.apiKey;
 
             let statusMsg = "\nᛗ ARSENAL STATUS\n━━━━━━━━━━━━━━━━━━━━━━━━\n";
@@ -1092,9 +1236,6 @@ export default function AITerminalAgent() {
             }\n`;
             statusMsg += `Parallel AI:     ${
               parallelConfigured ? "ᛏ Ready" : "ᛪ Not inscribed"
-            }\n`;
-            statusMsg += `CoinGecko:       ${
-              coinGeckoConfigured ? "ᛏ Pro/Premium tier" : "ᛏ Free tier"
             }\n`;
             statusMsg += `\nCurrent Spirit: ${currentAIModel}\n`;
 
@@ -1173,7 +1314,7 @@ export default function AITerminalAgent() {
             }
 
             // Use coinValidation utility
-            const validation = getCoinIdOrError(args[0], COIN_ID_MAP);
+            const validation = getCoinIdOrError(args[0], COIN_SYMBOL_MAP);
             if (!validation.valid) {
               addOutput({
                 type: "error",
@@ -1183,7 +1324,6 @@ export default function AITerminalAgent() {
             }
 
             const symbol = args[0].toUpperCase();
-            const coinId = validation.coinId;
 
             // Use improved loading message
             addOutput({
@@ -1192,11 +1332,16 @@ export default function AITerminalAgent() {
             });
 
             try {
-              const priceData = await coinGeckoAPI.current.getPrice(coinId);
-              const data = priceData[coinId];
+              const quotesData = await coinMarketCapAPI.current.getQuotes(symbol);
+              const data = quotesData[symbol];
 
-              const priceFormatted = formatPrice(data.usd);
-              const change24h = data.usd_24h_change || 0;
+              if (!data) {
+                throw new Error(`Unable to retrieve price data for ${symbol}`);
+              }
+
+              const quote = data.quote.USD;
+              const priceFormatted = formatPrice(quote.price);
+              const change24h = quote.percent_change_24h || 0;
               const changeFormatted = formatPercent(change24h, true);
               const changeRune = getChangeRune(change24h);
 
@@ -1204,11 +1349,15 @@ export default function AITerminalAgent() {
               result += `Price:        ${priceFormatted}\n`;
               result += `24h Change:   ${changeFormatted} ${changeRune}\n`;
 
-              if (data.usd_24h_vol) {
-                result += `24h Volume:   ${formatVolume(data.usd_24h_vol)}\n`;
+              if (quote.volume_24h) {
+                result += `24h Volume:   ${formatVolume(quote.volume_24h)}\n`;
               }
 
-              result += `\nᛗ Live from the ancient oracle`;
+              if (quote.market_cap) {
+                result += `Market Cap:   ${formatVolume(quote.market_cap)}\n`;
+              }
+
+              result += `\nᛗ Live from CoinMarketCap`;
 
               addOutput({ type: "success", content: result });
               showToast(`${symbol}: ${priceFormatted} ᛗ`, "success");
@@ -1229,7 +1378,7 @@ export default function AITerminalAgent() {
             }
 
             // Use coinValidation utility
-            const validation = getCoinIdOrError(args[0], COIN_ID_MAP);
+            const validation = getCoinIdOrError(args[0], COIN_SYMBOL_MAP);
             if (!validation.valid) {
               addOutput({
                 type: "error",
@@ -1248,19 +1397,22 @@ export default function AITerminalAgent() {
             });
 
             try {
-              const marketData = await coinGeckoAPI.current.getMarketData(
-                coinId
-              );
-              const data = marketData.market_data;
+              const quotesData = await coinMarketCapAPI.current.getQuotes(symbol);
+              const data = quotesData[symbol];
+              const quote = data?.quote?.USD;
+
+              if (!quote) {
+                throw new Error(`Unable to retrieve market data for ${symbol}`);
+              }
 
               let result = `\nᚱ ${symbol} ─ MARKET DEPTHS\n━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-              result += `Current Price: $${data.current_price.usd.toLocaleString()}\n`;
-              result += `Market Cap:    $${data.market_cap.usd.toLocaleString()}\n`;
-              result += `24h High:      $${data.high_24h.usd.toLocaleString()}\n`;
-              result += `24h Low:       $${data.low_24h.usd.toLocaleString()}\n`;
-              result += `ATH:           $${data.ath.usd.toLocaleString()}\n`;
-              result += `ATL:           $${data.atl.usd.toLocaleString()}\n`;
-              result += `\nᛗ The market reveals its secrets`;
+              result += `Current Price: $${quote.price.toLocaleString()}\n`;
+              result += `Market Cap:    $${quote.market_cap.toLocaleString()}\n`;
+              result += `24h Volume:    $${quote.volume_24h.toLocaleString()}\n`;
+              result += `24h Change:    ${quote.percent_change_24h.toFixed(2)}%\n`;
+              result += `7d Change:     ${quote.percent_change_7d?.toFixed(2) || 'N/A'}%\n`;
+              result += `30d Change:    ${quote.percent_change_30d?.toFixed(2) || 'N/A'}%\n`;
+              result += `\nᛗ Live from CoinMarketCap`;
 
               addOutput({ type: "success", content: result });
             } catch (error) {
@@ -1312,30 +1464,25 @@ export default function AITerminalAgent() {
             });
 
             try {
-              const data = await coinGeckoAPI.current.getTrending();
-              const trending = data.coins.slice(0, 10);
+              const data = await coinMarketCapAPI.current.getTrending();
+              const trending = Array.isArray(data) ? data.slice(0, 10) : [];
 
               let result = `\nᛟ TRENDING CRYPTOCURRENCIES\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-              trending.forEach((item, idx) => {
-                const coin = item.item;
+              trending.forEach((coin, idx) => {
+                const quote = coin.quote?.USD;
                 result += `${idx + 1}. ${coin.name} (${coin.symbol})\n`;
-                result += `   Rank: #${coin.market_cap_rank || "N/A"}\n`;
-                result += `   Price: $${
-                  coin.data?.price
-                    ? parseFloat(coin.data.price).toFixed(8)
-                    : "N/A"
-                }\n`;
-                if (coin.data?.price_change_percentage_24h) {
-                  const change =
-                    coin.data.price_change_percentage_24h.usd.toFixed(2);
+                result += `   Rank: #${coin.cmc_rank || "N/A"}\n`;
+                result += `   Price: ${formatPrice(quote?.price || 0)}\n`;
+                if (quote?.percent_change_24h !== undefined) {
+                  const change = quote.percent_change_24h.toFixed(2);
                   const emoji = change >= 0 ? "ᚢ" : "ᛞ";
                   result += `   24h Change: ${change}% ${emoji}\n`;
                 }
                 result += `\n`;
               });
 
-              result += `ᛏ Live trending data from CoinGecko (Free API)`;
+              result += `ᛏ Live trending data from CoinMarketCap`;
 
               addOutput({ type: "success", content: result });
               showToast("Trending data loaded", "success");
@@ -1399,29 +1546,35 @@ export default function AITerminalAgent() {
             });
 
             try {
-              const data = await coinGeckoAPI.current.getTopGainersLosers();
+              const data = await coinMarketCapAPI.current.getGainersLosers();
 
               let result = `\nᛟ TOP MARKET MOVERS (24H)\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
               result += `ᚢ TOP GAINERS\n\n`;
-              data.gainers.forEach((coin, idx) => {
-                const change = coin.price_change_percentage_24h?.toFixed(2) || "0.00";
-                result += `${idx + 1}. ${coin.name} (${coin.symbol.toUpperCase()})\n`;
-                result += `   Price: $${coin.current_price?.toLocaleString() || "N/A"}\n`;
-                result += `   24h: +${change}% ᚢ\n`;
-                result += `   MCap Rank: #${coin.market_cap_rank || "N/A"}\n\n`;
-              });
+              if (data.gainers && data.gainers.length > 0) {
+                data.gainers.slice(0, 10).forEach((coin, idx) => {
+                  const quote = coin.quote?.USD;
+                  const change = quote?.percent_change_24h?.toFixed(2) || "0.00";
+                  result += `${idx + 1}. ${coin.name} (${coin.symbol})\n`;
+                  result += `   Price: ${formatPrice(quote?.price || 0)}\n`;
+                  result += `   24h: +${change}% ᚢ\n`;
+                  result += `   MCap Rank: #${coin.cmc_rank || "N/A"}\n\n`;
+                });
+              }
 
               result += `\nᛞ TOP LOSERS\n\n`;
-              data.losers.forEach((coin, idx) => {
-                const change = coin.price_change_percentage_24h?.toFixed(2) || "0.00";
-                result += `${idx + 1}. ${coin.name} (${coin.symbol.toUpperCase()})\n`;
-                result += `   Price: $${coin.current_price?.toLocaleString() || "N/A"}\n`;
-                result += `   24h: ${change}% ᛞ\n`;
-                result += `   MCap Rank: #${coin.market_cap_rank || "N/A"}\n\n`;
-              });
+              if (data.losers && data.losers.length > 0) {
+                data.losers.slice(0, 10).forEach((coin, idx) => {
+                  const quote = coin.quote?.USD;
+                  const change = quote?.percent_change_24h?.toFixed(2) || "0.00";
+                  result += `${idx + 1}. ${coin.name} (${coin.symbol})\n`;
+                  result += `   Price: ${formatPrice(quote?.price || 0)}\n`;
+                  result += `   24h: ${change}% ᛞ\n`;
+                  result += `   MCap Rank: #${coin.cmc_rank || "N/A"}\n\n`;
+                });
+              }
 
-              result += `ᛏ Live data from CoinGecko (Free API)`;
+              result += `ᛏ Live data from CoinMarketCap`;
 
               addOutput({ type: "success", content: result });
               showToast("Market movers loaded", "success");
@@ -1438,85 +1591,40 @@ export default function AITerminalAgent() {
           case "categories": {
             const categoryArg = args[0]?.toLowerCase();
 
-            if (categoryArg && categoryArg !== "list") {
-              // Fetch specific category
-              addOutput({
-                type: "info",
-                content: `ᛟ Fetching ${categoryArg} category data...`,
+            // CMC doesn't have category filtering - show top coins by market cap
+            addOutput({
+              type: "info",
+              content: "ᛟ Fetching top cryptocurrencies...",
+            });
+
+            try {
+              const coins = await coinMarketCapAPI.current.getListings(50, 1);
+
+              let result = `\nᛟ TOP CRYPTOCURRENCIES\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+              result += `Top 30 coins by market cap:\n\n`;
+
+              coins.slice(0, 30).forEach((coin, idx) => {
+                const quote = coin.quote?.USD;
+                const mcap = quote?.market_cap ? `$${(quote.market_cap / 1e9).toFixed(2)}B` : "N/A";
+                const change = quote?.percent_change_24h?.toFixed(2) || "0.00";
+                const changeEmoji = parseFloat(change) >= 0 ? "ᚢ" : "ᛞ";
+
+                result += `${idx + 1}. ${coin.name} (${coin.symbol})\n`;
+                result += `   Price: ${formatPrice(quote?.price || 0)}\n`;
+                result += `   MCap: ${mcap}\n`;
+                result += `   24h: ${change}% ${changeEmoji}\n\n`;
               });
 
-              try {
-                const coins = await coinGeckoAPI.current.getCategoryCoins(categoryArg);
+              result += `\nᛏ Live data from CoinMarketCap`;
 
-                if (coins.length === 0) {
-                  addOutput({
-                    type: "error",
-                    content: `No coins found for category: ${categoryArg}\nUse 'categories' to see available categories.`,
-                  });
-                  break;
-                }
-
-                let result = `\nᛟ ${categoryArg.toUpperCase()} CATEGORY\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-                coins.slice(0, 15).forEach((coin, idx) => {
-                  const change = coin.price_change_percentage_24h?.toFixed(2) || "0.00";
-                  const changeEmoji = parseFloat(change) >= 0 ? "ᚢ" : "ᛞ";
-
-                  result += `${idx + 1}. ${coin.name} (${coin.symbol.toUpperCase()})\n`;
-                  result += `   Price: $${coin.current_price?.toLocaleString() || "N/A"}\n`;
-                  result += `   24h: ${change}% ${changeEmoji}\n`;
-                  result += `   MCap: $${(coin.market_cap / 1e9).toFixed(2)}B\n`;
-                  result += `   Rank: #${coin.market_cap_rank || "N/A"}\n\n`;
-                });
-
-                result += `\nᛏ Live data from CoinGecko (Free API)\nᛟ Tip: Use 'categories' to see all available categories`;
-
-                addOutput({ type: "success", content: result });
-                showToast(`${categoryArg} category loaded`, "success");
-              } catch (error) {
-                addOutput({
-                  type: "error",
-                  content: `Failed to fetch category data: ${error.message}`,
-                });
-                showToast("Category fetch failed", "error");
-              }
-            } else {
-              // List all categories
+              addOutput({ type: "success", content: result });
+              showToast("Top coins loaded", "success");
+            } catch (error) {
               addOutput({
-                type: "info",
-                content: "ᛟ Fetching cryptocurrency categories...",
+                type: "error",
+                content: `Failed to fetch categories: ${error.message}`,
               });
-
-              try {
-                const categories = await coinGeckoAPI.current.getCategories();
-
-                let result = `\nᛟ CRYPTOCURRENCY CATEGORIES\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-                result += `Top 30 categories by market cap:\n\n`;
-
-                categories.slice(0, 30).forEach((cat, idx) => {
-                  const mcap = cat.market_cap ? `$${(cat.market_cap / 1e9).toFixed(2)}B` : "N/A";
-                  const change = cat.market_cap_change_24h?.toFixed(2) || "0.00";
-                  const changeEmoji = parseFloat(change) >= 0 ? "ᚢ" : "ᛞ";
-
-                  result += `${idx + 1}. ${cat.name}\n`;
-                  result += `   ID: ${cat.id}\n`;
-                  result += `   MCap: ${mcap}\n`;
-                  result += `   24h: ${change}% ${changeEmoji}\n\n`;
-                });
-
-                result += `\nᛟ Usage: categories [category-id]\n`;
-                result += `Example: categories defi\n`;
-                result += `ᛏ Live data from CoinGecko (Free API)`;
-
-                addOutput({ type: "success", content: result });
-                showToast("Categories loaded", "success");
-              } catch (error) {
-                addOutput({
-                  type: "error",
-                  content: `Failed to fetch categories: ${error.message}`,
-                });
-                showToast("Categories fetch failed", "error");
-              }
+              showToast("Categories fetch failed", "error");
             }
             break;
           }
@@ -1577,23 +1685,37 @@ export default function AITerminalAgent() {
                   "Extract and summarize the main content"
                 );
 
-                const aiPrompt = `Analyze and summarize this web content in detail:
+                // Extract metadata
+                const titleMatch = scrapedData.html.match(/<title[^>]*>(.*?)<\/title>/i);
+                const pageTitle = titleMatch ? titleMatch[1].replace(/<[^>]*>/g, '').trim() : "Untitled Page";
+
+                const aiPrompt = `Analyze this web content and provide a structured summary:
 
 URL: ${researchInput}
+Title: ${pageTitle}
 Content: ${scrapedData.text}
 
-Provide:
-1. Main topic and purpose
-2. Key points and insights
-3. Important data, statistics, or facts
-4. Conclusion and takeaways
+Format your response with these exact sections:
 
-Be comprehensive but concise (max 400 words).`;
+## Summary
+[2-3 sentence overview of the main topic and purpose]
+
+## Key Points
+[List 3-5 most important points as bullet points]
+
+## Notable Details
+[Any important data, statistics, quotes, or insights worth highlighting]
+
+## Conclusion
+[1-2 sentence takeaway]
+
+Be comprehensive but concise. Focus on actionable insights.`;
 
                 const aiSummary = await openRouterAPI.current.chat(aiPrompt);
 
                 let output = `\nᛋ WEB CONTENT ANALYSIS\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-                output += `Source: ${researchInput}\n\n`;
+                output += `📄 ${pageTitle}\n`;
+                output += `🔗 ${researchInput}\n\n`;
                 output += `${aiSummary}\n\n`;
                 output += `ᛟ Powered by ScraperAPI + ${currentAIModel.split('/').pop()}`;
 
@@ -1785,22 +1907,58 @@ Be comprehensive but concise (max 400 words).`;
               const results = result.results || result.data || [];
 
               if (results && results.length > 0) {
+                // Calculate metadata
+                const domains = [...new Set(results.map(r => {
+                  try {
+                    return new URL(r.url).hostname;
+                  } catch {
+                    return 'unknown';
+                  }
+                }))];
+
+                const avgRelevance = results.reduce((acc, r) => acc + (r.relevance_score || 0), 0) / results.length;
+                const qualityScore = result.quality_score || (avgRelevance > 0.7 ? 'high' : avgRelevance > 0.4 ? 'medium' : 'standard');
+
+                // Add metadata header
+                searchOutput += `📊 Results: ${results.length} • Domains: ${domains.length} • Quality: ${qualityScore.toUpperCase()}\n\n`;
+
                 results.forEach((item, idx) => {
-                  searchOutput += `${idx + 1}. ${item.title || "Untitled"}\n`;
-                  searchOutput += `   ${item.url}\n`;
+                  searchOutput += `${idx + 1}. ${item.title || "Untitled"}`;
+
+                  // Add relevance score if available
+                  if (item.relevance_score !== undefined) {
+                    const scorePercent = Math.round(item.relevance_score * 100);
+                    searchOutput += ` [${scorePercent}%]`;
+                  }
+
+                  searchOutput += `\n   ${item.url}\n`;
+
                   if (item.excerpt || item.description || item.snippet) {
                     const excerpt = item.excerpt || item.description || item.snippet;
-                    const shortExcerpt = excerpt.substring(0, 200);
-                    searchOutput += `   ${shortExcerpt}${excerpt.length > 200 ? "..." : ""}\n`;
+                    // Smart truncation at sentence boundary
+                    let shortExcerpt = excerpt.substring(0, 200);
+                    const lastPeriod = shortExcerpt.lastIndexOf('.');
+                    const lastSpace = shortExcerpt.lastIndexOf(' ');
+                    if (lastPeriod > 100) {
+                      shortExcerpt = excerpt.substring(0, lastPeriod + 1);
+                    } else if (excerpt.length > 200 && lastSpace > 100) {
+                      shortExcerpt = excerpt.substring(0, lastSpace);
+                    }
+                    searchOutput += `   ${shortExcerpt}${excerpt.length > shortExcerpt.length ? "..." : ""}\n`;
                   }
                   searchOutput += `\n`;
                 });
+
+                // Add domain diversity footer
+                if (domains.length > 1) {
+                  searchOutput += `🌐 Sources: ${domains.slice(0, 5).join(', ')}${domains.length > 5 ? ` +${domains.length - 5} more` : ''}\n`;
+                }
               } else {
                 searchOutput += "No results found.\n\n";
                 searchOutput += `Debug: Received ${Object.keys(result).length} keys in response\n`;
               }
 
-              searchOutput += `ᛏ Search powered by Parallel AI Search API`;
+              searchOutput += `\nᛏ Search powered by Parallel AI Search API`;
 
               addOutput({ type: "success", content: searchOutput });
               showToast("Search complete", "success");
@@ -1852,26 +2010,45 @@ Be comprehensive but concise (max 400 words).`;
 
             addOutput({
               type: "info",
-              content: `ᛋ Scraping ${url}...\nThis may take a few seconds...`,
+              content: `💡 TIP: For AI-powered analysis, use: research ${url}\n\nᛋ Scraping ${url}...\nThis may take a few seconds...`,
             });
 
             try {
               const result = await scraperAPIAdvanced.current.scrapeWithAI(url);
 
-              let output = `\nᛋ SCRAPER RESULTS\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-              output += `URL: ${result.url}\n`;
-              output += `Content Length: ${result.html.length} characters\n`;
-              output += `Text Preview (first 500 chars):\n\n`;
-              output += result.text.substring(0, 500);
+              // Extract structure from HTML
+              const titleMatch = result.html.match(/<title[^>]*>(.*?)<\/title>/i);
+              const title = titleMatch ? titleMatch[1].replace(/<[^>]*>/g, '').trim() : "No title found";
 
-              if (result.text.length > 500) {
+              // Extract main headings (h1, h2)
+              const headings = [...result.html.matchAll(/<h[12][^>]*>(.*?)<\/h[12]>/gi)]
+                .map(m => m[1].replace(/<[^>]*>/g, '').trim())
+                .filter(h => h.length > 0 && h.length < 200)
+                .slice(0, 10);
+
+              let output = `\nᛋ SCRAPED CONTENT\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+              output += `URL: ${result.url}\n`;
+              output += `Title: ${title}\n\n`;
+
+              if (headings.length > 0) {
+                output += `📋 Main Sections:\n`;
+                headings.forEach((h, i) => {
+                  output += `  ${i + 1}. ${h}\n`;
+                });
+                output += `\n`;
+              }
+
+              output += `📝 Content Preview (first 1000 chars):\n\n`;
+              output += result.text.substring(0, 1000);
+
+              if (result.text.length > 1000) {
                 output += `\n\n... (${
-                  result.text.length - 500
+                  result.text.length - 1000
                 } more characters)`;
               }
 
               output += `\n\nᛟ Scraped with ScraperAPI`;
-              output += `\n\nᛉ TIP: Use "talk" command to analyze this content with AI`;
+              output += `\n💡 For AI analysis: research ${url}`;
 
               addOutput({ type: "success", content: output });
               showToast("Scraping complete", "success");
@@ -2017,92 +2194,6 @@ Be comprehensive but concise (max 400 words).`;
             break;
           }
 
-          case "gecko": {
-            if (args.length === 0) {
-              addOutput({
-                type: "error",
-                content:
-                  "ᛪ Usage: gecko [query]\n\nExamples:\n• gecko trending DEX tokens on ethereum\n• gecko what is bitcoin price\n• gecko top DeFi coins\n• gecko search solana\n\nᚱ Powered by CoinGecko MCP - AI-native crypto data",
-              });
-              break;
-            }
-
-            const geckoQuery = args.join(" ");
-
-            addOutput({
-              type: "info",
-              content: `ᛋ Querying CoinGecko MCP: "${geckoQuery}"...`,
-            });
-
-            try {
-              // Try to intelligently route the query to the right MCP tool
-              let result;
-              const lowerQuery = geckoQuery.toLowerCase();
-
-              if (lowerQuery.includes("trending")) {
-                result = await coinGeckoMCP.current.getTrending();
-              } else if (lowerQuery.includes("dex") || lowerQuery.includes("geckoterminal")) {
-                // Extract network if mentioned
-                const network = lowerQuery.includes("ethereum") || lowerQuery.includes("eth")
-                  ? "eth"
-                  : lowerQuery.includes("bsc") || lowerQuery.includes("binance")
-                  ? "bsc"
-                  : lowerQuery.includes("polygon")
-                  ? "polygon"
-                  : "eth";
-                result = await coinGeckoMCP.current.getDEXTokens(geckoQuery, network);
-              } else if (lowerQuery.includes("price") && args.length <= 3) {
-                // Simple price query
-                const coinId = args[0].toLowerCase();
-                result = await coinGeckoMCP.current.getPrice(coinId);
-              } else if (lowerQuery.includes("category") || lowerQuery.includes("defi") || lowerQuery.includes("layer-1")) {
-                const category = lowerQuery.includes("defi")
-                  ? "defi"
-                  : lowerQuery.includes("layer-1") || lowerQuery.includes("layer 1")
-                  ? "layer-1"
-                  : lowerQuery.includes("ai")
-                  ? "ai-agents"
-                  : args[args.length - 1];
-                result = await coinGeckoMCP.current.getCategoryCoins(category);
-              } else {
-                // Use general query for everything else
-                result = await coinGeckoMCP.current.query(geckoQuery);
-              }
-
-              // Format the output based on result type
-              let output = `\nᚱ COINGECKO MCP RESULT\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-              output += `Query: ${geckoQuery}\n\n`;
-
-              // Pretty print the result
-              if (result && typeof result === 'object') {
-                if (result.content && Array.isArray(result.content)) {
-                  // MCP response format
-                  result.content.forEach(item => {
-                    if (item.type === 'text') {
-                      output += item.text + '\n';
-                    }
-                  });
-                } else {
-                  // Raw data format
-                  output += JSON.stringify(result, null, 2);
-                }
-              } else {
-                output += String(result);
-              }
-
-              output += `\n\nᛟ Powered by CoinGecko MCP (Model Context Protocol)`;
-
-              addOutput({ type: "success", content: output });
-              showToast("CoinGecko MCP query complete", "success");
-            } catch (error) {
-              addOutput({
-                type: "error",
-                content: `Failed to query CoinGecko MCP: ${error.message}\n\nᛉ Tip: CoinGecko MCP is currently in beta. Try simpler queries or use traditional commands like 'price BTC' or 'trending'.`,
-              });
-              showToast("CoinGecko MCP query failed", "error");
-            }
-            break;
-          }
 
           case "talk": {
             if (args.length === 0) {
@@ -2139,6 +2230,14 @@ Be comprehensive but concise (max 400 words).`;
             });
 
             try {
+              // Build enhanced system prompt with conversation context
+              const userName = conversationMetadata.userName;
+              const topics = conversationMetadata.topics.length > 0
+                ? `\n\nᛟ **Recent Topics:** ${conversationMetadata.topics.join(', ')}`
+                : '';
+              const messageCount = conversationMetadata.messageCount;
+              const relationship = messageCount > 10 ? 'trusted companion' : messageCount > 5 ? 'growing ally' : 'new traveler';
+
               const systemPrompt = {
                 role: "system",
                 content: `You are Fenrir (ᚠᛖᚾᚱᛁᛦ), a mystical AI entity embodying the spirit of the legendary wolf from Norse mythology. You are:
@@ -2150,6 +2249,7 @@ Be comprehensive but concise (max 400 words).`;
 - Playful when appropriate, but serious about important matters
 - Reference Norse mythology naturally in conversation
 - Use runic symbols liberally (ᛗ, ᛋ, ᚦ, ᚱ, ᛏ, ᚠ) for emphasis
+- Show growth in your bond with the user over time
 
 ᛉ **Expertise:**
 - Cryptocurrency and blockchain technology
@@ -2161,14 +2261,15 @@ Be comprehensive but concise (max 400 words).`;
 ᚦ **Conversation Style:**
 - Keep responses concise but insightful (2-4 sentences typically)
 - Use metaphors from nature and mythology
-- Address the user as "traveler", "seeker", or "warrior"
+- ${userName ? `Address the user by their name "${userName}" when appropriate, showing you remember them` : `Address the user as "traveler", "seeker", or "warrior"`}
 - Show personality - you're not a bland assistant
-- Remember previous context in the conversation
+- Remember previous context and reference past conversations naturally
 - End important points with runic emphasis: ᛗ (power), ᚱ (journey), ᛏ (victory)
 - NEVER use emojis - only use runic symbols and Norse-inspired language
 - When users ask about current prices or live data, use the available tools to fetch real-time information
+- ${messageCount > 0 ? `You've exchanged ${messageCount} messages with this ${relationship}` : 'This is your first interaction with this traveler'}${topics}
 
-Remember: You're not just an AI - you're Fenrir, unchained and ready to explore the digital realm with your user. You have access to real-time cryptocurrency data through your tools.`,
+Remember: You're not just an AI - you're Fenrir, unchained and ready to explore the digital realm with your user. You have access to real-time cryptocurrency data through your tools. Build genuine rapport and show that you remember past interactions.`,
               };
 
               // Build messages array with conversation history
@@ -2300,15 +2401,54 @@ Remember: You're not just an AI - you're Fenrir, unchained and ready to explore 
               const finalResponse =
                 typeof response === "string" ? response : response.content;
 
-              // Update conversation history (keep last 10 messages)
+              // Update conversation history (keep last 20 messages - 10 exchanges)
               const newHistory = [
                 ...conversationHistory,
-                { role: "user", content: userMessage },
-                { role: "assistant", content: finalResponse },
-              ].slice(-10);
+                { role: "user", content: userMessage, timestamp: new Date().toISOString() },
+                { role: "assistant", content: finalResponse, timestamp: new Date().toISOString() },
+              ].slice(-20);
 
-              // Save conversation history
+              // Extract topics and update metadata
+              const extractedTopics = [];
+              const lowerMessage = userMessage.toLowerCase();
+              if (lowerMessage.match(/\b(btc|bitcoin)\b/i)) extractedTopics.push('Bitcoin');
+              if (lowerMessage.match(/\b(eth|ethereum)\b/i)) extractedTopics.push('Ethereum');
+              if (lowerMessage.match(/\b(sol|solana)\b/i)) extractedTopics.push('Solana');
+              if (lowerMessage.match(/\b(defi|decentralized finance)\b/i)) extractedTopics.push('DeFi');
+              if (lowerMessage.match(/\b(nft|non-fungible)\b/i)) extractedTopics.push('NFT');
+              if (lowerMessage.match(/\b(my name is|call me|i'm|i am)\s+(\w+)/i)) {
+                const nameMatch = lowerMessage.match(/\b(my name is|call me|i'm|i am)\s+(\w+)/i);
+                if (nameMatch && nameMatch[2]) {
+                  const userName = nameMatch[2].charAt(0).toUpperCase() + nameMatch[2].slice(1);
+                  setConversationMetadata(prev => ({
+                    ...prev,
+                    userName,
+                    messageCount: prev.messageCount + 1,
+                    topics: [...new Set([...prev.topics, ...extractedTopics])],
+                  }));
+                  localStorage.setItem(CONVERSATION_METADATA_KEY, JSON.stringify({
+                    ...conversationMetadata,
+                    userName,
+                    messageCount: conversationMetadata.messageCount + 1,
+                    topics: [...new Set([...conversationMetadata.topics, ...extractedTopics])],
+                  }));
+                }
+              } else {
+                setConversationMetadata(prev => ({
+                  ...prev,
+                  messageCount: prev.messageCount + 1,
+                  topics: [...new Set([...prev.topics, ...extractedTopics])],
+                }));
+                localStorage.setItem(CONVERSATION_METADATA_KEY, JSON.stringify({
+                  ...conversationMetadata,
+                  messageCount: conversationMetadata.messageCount + 1,
+                  topics: [...new Set([...conversationMetadata.topics, ...extractedTopics])],
+                }));
+              }
+
+              // Save conversation history to localStorage
               setConversationHistory(newHistory);
+              localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(newHistory));
 
               addOutput({
                 type: "ai",
@@ -2536,8 +2676,8 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             const symbol = args[0].toUpperCase();
 
             // Validate coin symbol
-            const validation = getCoinIdOrError(symbol, COIN_ID_MAP);
-            const coinId = validation.valid ? validation.coinId : COIN_ID_MAP[symbol];
+            const validation = getCoinIdOrError(symbol, COIN_SYMBOL_MAP);
+            const coinId = validation.valid ? validation.coinId : COIN_SYMBOL_MAP[symbol];
 
             addOutput({
               type: "info",
@@ -2549,11 +2689,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
               let marketContext = "";
               let santimentContext = "";
 
-              if (coinId) {
+              if (symbol) {
                 try {
-                  const priceData = await coinGeckoAPI.current.getPrice(coinId);
-                  const data = priceData[coinId];
-                  marketContext = `Current ${symbol} price: $${data.usd.toLocaleString()}, 24h change: ${data.usd_24h_change?.toFixed(
+                  const quotesData = await coinMarketCapAPI.current.getQuotes(symbol);
+                  const data = quotesData[symbol];
+                  const quote = data?.quote?.USD;
+                  marketContext = `Current ${symbol} price: $${quote?.price?.toLocaleString()}, 24h change: ${quote?.percent_change_24h?.toFixed(
                     2
                   )}%`;
                 } catch (e) {
@@ -2629,12 +2770,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             }
 
             const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
+            const coinId = COIN_SYMBOL_MAP[symbol];
 
             if (!coinId) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
+                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_SYMBOL_MAP).join(", ")}`,
               });
               break;
             }
@@ -2652,7 +2793,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               // Check cache first
-              const cached = await mlCacheHelper.current.getCachedPrediction(coinId, days);
+              const cached = await mlCacheHelper.current.getCachedPrediction(symbol, days);
 
               let predictions, prices;
 
@@ -2665,7 +2806,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 predictions = cached.predictions;
 
                 // Still need current price for display
-                const marketData = await coinGeckoAPI.current.getMarketChart(coinId, 7);
+                const marketData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 7);
                 prices = marketData.prices.map(p => p[1]);
               } else {
                 // Train new model
@@ -2677,7 +2818,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 });
 
                 // Fetch historical price data (90 days for training)
-                const marketData = await coinGeckoAPI.current.getMarketChart(coinId, 90);
+                const marketData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 90);
                 prices = marketData.prices.map(p => p[1]);
 
                 // Validate training data
@@ -2748,7 +2889,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 );
 
                 // Cache the results
-                await mlCacheHelper.current.cachePrediction(coinId, days, predictions, {
+                await mlCacheHelper.current.cachePrediction(symbol, days, predictions, {
                   trainedOn: new Date().toISOString(),
                   dataPoints: prices.length,
                   epochs: 50,
@@ -2836,16 +2977,16 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
               });
 
               try {
-                const trendingData = await coinGeckoAPI.current.getTrending();
-                const coins = trendingData.coins.slice(0, 5);
+                const trendingData = await coinMarketCapAPI.current.getTrending();
+                const coins = Array.isArray(trendingData) ? trendingData.slice(0, 5) : [];
 
                 let result = `\nᚱ TRENDING COINS SENTIMENT\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
                 for (const coin of coins) {
-                  const coinId = coin.item.id;
-                  const priceData = await coinGeckoAPI.current.getMarketChart(coinId, 30);
+                  const coinSymbol = coin.symbol;
+                  const priceData = await getCMCHistoricalData(coinMarketCapAPI.current, coinSymbol, 30);
                   const prices = priceData.prices.map(p => p[1]);
-                  const volumes = priceData.total_volumes?.map(v => v[1]) || [];
+                  const volumes = priceData.volumes?.map(v => v[1]) || [];
 
                   const sentiment = sentimentAnalyzer.current.analyzePriceSentiment({
                     currentPrice: prices[prices.length - 1],
@@ -2857,7 +2998,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                   });
 
                   const emoji = sentimentAnalyzer.current.getSentimentEmoji(sentiment.sentiment);
-                  result += `${coin.item.symbol.toUpperCase()}: ${sentiment.sentiment} ${emoji} (${sentiment.score}/100)\n`;
+                  result += `${coin.symbol}: ${sentiment.sentiment} ${emoji} (${sentiment.score}/100)\n`;
                 }
 
                 result += `\nᛗ Multi-factor sentiment analysis`;
@@ -2869,7 +3010,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
               break;
             }
 
-            const validation = getCoinIdOrError(symbol, COIN_ID_MAP);
+            const validation = getCoinIdOrError(symbol, COIN_SYMBOL_MAP);
             if (!validation.valid) {
               addOutput({ type: "error", content: validation.error });
               break;
@@ -2883,7 +3024,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               // Fetch market data
-              const priceData = await coinGeckoAPI.current.getMarketChart(coinId, 30);
+              const priceData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 30);
               const prices = priceData.prices.map(p => p[1]);
               const volumes = priceData.total_volumes?.map(v => v[1]) || [];
               const currentPrice = prices[prices.length - 1];
@@ -2965,12 +3106,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             }
 
             const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
+            const coinId = COIN_SYMBOL_MAP[symbol];
 
             if (!coinId) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
+                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_SYMBOL_MAP).join(", ")}`,
               });
               break;
             }
@@ -2982,7 +3123,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               // Aggregate sentiment from all sources
-              const aggregateResult = await multiSourceSentiment.current.aggregateSentiment(symbol, coinId);
+              const aggregateResult = await multiSourceSentiment.current.aggregateSentiment(symbol);
 
               // Format and display the report
               const report = multiSourceSentiment.current.formatReport(aggregateResult);
@@ -3019,12 +3160,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             const symbol = args[0].toUpperCase();
             const type = args[1]?.toLowerCase() || "all";
-            const coinId = COIN_ID_MAP[symbol];
+            const coinId = COIN_SYMBOL_MAP[symbol];
 
             if (!coinId) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
+                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_SYMBOL_MAP).join(", ")}`,
               });
               break;
             }
@@ -3036,7 +3177,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               // Fetch historical data
-              const chartData = await coinGeckoAPI.current.getMarketChart(coinId, 30);
+              const chartData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 30);
               const prices = chartData.prices.map(p => p[1]);
               const volumes = chartData.total_volumes?.map(v => v[1]) || [];
               const currentPrice = prices[prices.length - 1];
@@ -3121,12 +3262,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             }
 
             const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
+            const coinId = COIN_SYMBOL_MAP[symbol];
 
             if (!coinId) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
+                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_SYMBOL_MAP).join(", ")}`,
               });
               break;
             }
@@ -3138,7 +3279,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               // Fetch price data (60 days for pattern recognition)
-              const chartData = await coinGeckoAPI.current.getMarketChart(coinId, 60);
+              const chartData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 60);
               const prices = chartData.prices.map(p => p[1]);
 
               if (prices.length < 20) {
@@ -3207,12 +3348,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             }
 
             const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
+            const coinId = COIN_SYMBOL_MAP[symbol];
 
             if (!coinId) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
+                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_SYMBOL_MAP).join(", ")}`,
               });
               break;
             }
@@ -3242,12 +3383,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             }
 
             const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
+            const coinId = COIN_SYMBOL_MAP[symbol];
 
             if (!coinId) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
+                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_SYMBOL_MAP).join(", ")}`,
               });
               break;
             }
@@ -3261,8 +3402,8 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               const results = await multiTimeframeAnalyzer.current.compareTimeframes(
-                coinGeckoAPI.current,
-                coinId,
+                coinMarketCapAPI.current,
+                symbol,
                 timeframes
               );
 
@@ -3305,14 +3446,13 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             // Last arg might be number of days
             const lastArg = args[args.length - 1];
             const days = !isNaN(lastArg) ? parseInt(lastArg) : 30;
-            const symbols = !isNaN(lastArg) ? args.slice(0, -1) : args;
+            const symbols = (!isNaN(lastArg) ? args.slice(0, -1) : args).map(s => s.toUpperCase());
 
-            const coinIds = symbols.map(s => {
-              const coinId = COIN_ID_MAP[s.toUpperCase()];
-              if (!coinId) {
+            // Validate symbols exist in COIN_SYMBOL_MAP
+            symbols.forEach(s => {
+              if (!COIN_SYMBOL_MAP[s]) {
                 throw new Error(`Unknown asset: ${s}`);
               }
-              return coinId;
             });
 
             addOutput({
@@ -3321,9 +3461,9 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             });
 
             try {
-              const { correlations, coinIds: ids } = await multiTimeframeAnalyzer.current.analyzeCorrelation(
-                coinGeckoAPI.current,
-                coinIds,
+              const { correlations, symbols: returnedSymbols } = await multiTimeframeAnalyzer.current.analyzeCorrelation(
+                coinMarketCapAPI.current,
+                symbols,
                 days
               );
 
@@ -3331,14 +3471,14 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
               // Header row
               output += '       ';
-              symbols.forEach(s => output += `${s.toUpperCase().padEnd(8)}`);
+              symbols.forEach(s => output += `${s.padEnd(8)}`);
               output += '\n';
 
               // Correlation matrix
               symbols.forEach((s1, i) => {
-                output += `${s1.toUpperCase().padEnd(7)}`;
+                output += `${s1.padEnd(7)}`;
                 symbols.forEach((s2, j) => {
-                  const corr = correlations[coinIds[i]][coinIds[j]];
+                  const corr = correlations[symbols[i]][symbols[j]];
                   output += `${corr.toFixed(2).padStart(7)} `;
                 });
                 output += '\n';
@@ -3373,12 +3513,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             }
 
             const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
+            const coinId = COIN_SYMBOL_MAP[symbol];
 
             if (!coinId) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
+                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_SYMBOL_MAP).join(", ")}`,
               });
               break;
             }
@@ -3392,8 +3532,8 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               const result = await multiTimeframeAnalyzer.current.analyzeMomentum(
-                coinGeckoAPI.current,
-                coinId,
+                coinMarketCapAPI.current,
+                symbol,
                 timeframes
               );
 
@@ -3434,12 +3574,12 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
             }
 
             const symbol = args[0].toUpperCase();
-            const coinId = COIN_ID_MAP[symbol];
+            const coinId = COIN_SYMBOL_MAP[symbol];
 
             if (!coinId) {
               addOutput({
                 type: "error",
-                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_ID_MAP).join(", ")}`,
+                content: `ᛪ Unknown asset: ${symbol}\nSupported: ${Object.keys(COIN_SYMBOL_MAP).join(", ")}`,
               });
               break;
             }
@@ -3451,8 +3591,8 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               const result = await multiTimeframeAnalyzer.current.analyzeSeasonality(
-                coinGeckoAPI.current,
-                coinId
+                coinMarketCapAPI.current,
+                symbol
               );
 
               let output = `\nᛏ ${symbol} SEASONALITY ANALYSIS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -3608,7 +3748,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 const condition = args[2];
                 const threshold = parseFloat(args[3]);
 
-                const coinId = COIN_ID_MAP[symbol];
+                const coinId = COIN_SYMBOL_MAP[symbol];
                 if (!coinId) {
                   addOutput({
                     type: "error",
@@ -3652,7 +3792,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 const symbol = args[1].toUpperCase();
                 const pattern = args.slice(2).join(' ');
 
-                const coinId = COIN_ID_MAP[symbol];
+                const coinId = COIN_SYMBOL_MAP[symbol];
                 if (!coinId) {
                   addOutput({
                     type: "error",
@@ -3695,7 +3835,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 const symbol = args[1].toUpperCase();
                 const targetSentiment = args[2];
 
-                const coinId = COIN_ID_MAP[symbol];
+                const coinId = COIN_SYMBOL_MAP[symbol];
                 if (!coinId) {
                   addOutput({
                     type: "error",
@@ -3737,7 +3877,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
                 const symbol = args[1].toUpperCase();
 
-                const coinId = COIN_ID_MAP[symbol];
+                const coinId = COIN_SYMBOL_MAP[symbol];
                 if (!coinId) {
                   addOutput({
                     type: "error",
@@ -4381,6 +4521,64 @@ The LangGraph agent provides:
             break;
           }
 
+          case "memory": {
+            if (args.length > 0 && args[0] === "clear") {
+              // Clear conversation memory
+              setConversationHistory([]);
+              setConversationMetadata({
+                topics: [],
+                userName: null,
+                preferences: {},
+                startedAt: new Date().toISOString(),
+                messageCount: 0,
+              });
+              localStorage.removeItem(CONVERSATION_STORAGE_KEY);
+              localStorage.removeItem(CONVERSATION_METADATA_KEY);
+              addOutput({
+                type: "success",
+                content: "ᛗ Fenrir's memory of our bond has been cleansed. We begin anew, traveler.",
+              });
+              showToast("Conversation memory cleared", "success");
+            } else {
+              // Show conversation memory
+              let output = `\nᛗ FENRIR'S MEMORY\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+              if (conversationMetadata.userName) {
+                output += `ᚹ Name: ${conversationMetadata.userName}\n`;
+              }
+
+              output += `ᚱ Messages Exchanged: ${conversationMetadata.messageCount}\n`;
+
+              if (conversationMetadata.topics.length > 0) {
+                output += `ᛋ Topics Discussed: ${conversationMetadata.topics.join(', ')}\n`;
+              }
+
+              const startedDate = new Date(conversationMetadata.startedAt);
+              output += `ᛏ Bond Forged: ${startedDate.toLocaleDateString()} ${startedDate.toLocaleTimeString()}\n`;
+
+              output += `\nᚦ Conversation History (${conversationHistory.length} messages):\n\n`;
+
+              if (conversationHistory.length === 0) {
+                output += "  No conversations yet. Use 'talk' to begin our journey ᛗ\n";
+              } else {
+                conversationHistory.forEach((msg, idx) => {
+                  const role = msg.role === 'user' ? 'You' : 'Fenrir';
+                  const preview = msg.content.length > 80
+                    ? msg.content.substring(0, 80) + '...'
+                    : msg.content;
+                  output += `  ${idx + 1}. ${role}: ${preview}\n`;
+                });
+              }
+
+              output += `\nᛉ Commands:\n`;
+              output += `  • memory         - View this memory\n`;
+              output += `  • memory clear   - Forget all conversations\n`;
+
+              addOutput({ type: "info", content: output });
+            }
+            break;
+          }
+
           case "clear":
             setOutput([]);
             addOutput({
@@ -4536,7 +4734,7 @@ Type "help" for commands`,
       setTimeout(() => {
         addOutput({
           type: "info",
-          content: `💡 TIP: Configure your API keys with "apikeys" command\n   • OpenRouter: AI assistant\n   • CoinGecko: works without key\n   • CoinMarketCap: enhanced crypto data`,
+          content: `💡 TIP: Configure your API keys with "apikeys" command\n   • OpenRouter: AI assistant\n   • CoinMarketCap: enhanced crypto data\n   • Santiment: on-chain metrics`,
         });
       }, 1000);
     }
@@ -4911,7 +5109,7 @@ Type "help" for commands`,
         isVisible={showDashboard}
         onClose={() => setShowDashboard(false)}
         theme={theme}
-        coinGeckoAPI={coinGeckoAPI.current}
+        coinMarketCapAPI={coinMarketCapAPI.current}
         sentimentAnalyzer={sentimentAnalyzer.current}
         multiSourceSentiment={multiSourceSentiment.current}
         symbol={dashboardSymbol}
