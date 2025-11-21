@@ -48,7 +48,10 @@ class SantimentAPI {
 
       return data.data;
     } catch (error) {
-      console.error("Santiment API error:", error);
+      // Only log unexpected errors, suppress common issues
+      if (!error.message.includes("null") && !error.message.includes("not found")) {
+        console.error("Santiment API error:", error);
+      }
       throw error;
     }
   }
@@ -159,6 +162,17 @@ class SantimentAPI {
 
   // Get enriched analysis combining multiple metrics
   async getEnrichedAnalysis(slug) {
+    // Validate slug parameter
+    if (!slug || slug === null || slug === undefined) {
+      console.warn("Santiment getEnrichedAnalysis called with null/undefined slug");
+      return {
+        social: 0,
+        dev: 0,
+        mvrv: 0,
+        addresses: 0,
+      };
+    }
+
     const query = `
       query($slug: String!) {
         social: getMetric(metric: "social_volume_total") {
@@ -199,9 +213,11 @@ class SantimentAPI {
         addresses: result?.data?.addresses || 0,
       };
     } catch (error) {
-      // If error mentions subscription limits, return partial data
-      if (error.message.includes("subscription")) {
-        console.warn("Santiment free tier limitation, returning partial data");
+      // Suppress console errors and return default data for common issues
+      if (error.message.includes("subscription") ||
+          error.message.includes("null") ||
+          error.message.includes("not found")) {
+        // Silently return default data without logging to console
         return {
           social: 0,
           dev: 0,
@@ -209,7 +225,14 @@ class SantimentAPI {
           addresses: 0,
         };
       }
-      throw error;
+      // Only log unexpected errors
+      console.warn("Santiment API error:", error.message);
+      return {
+        social: 0,
+        dev: 0,
+        mvrv: 0,
+        addresses: 0,
+      };
     }
   }
 }

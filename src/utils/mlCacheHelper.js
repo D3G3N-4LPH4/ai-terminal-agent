@@ -23,7 +23,7 @@ class MLCacheHelper {
       }
       return null;
     } catch (error) {
-      console.warn('Cache read failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return null;
     }
   }
@@ -46,7 +46,7 @@ class MLCacheHelper {
       const result = await response.json();
       return result.success;
     } catch (error) {
-      console.warn('Cache write failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return false;
     }
   }
@@ -65,7 +65,7 @@ class MLCacheHelper {
       }
       return null;
     } catch (error) {
-      console.warn('Cache read failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return null;
     }
   }
@@ -85,7 +85,7 @@ class MLCacheHelper {
       const result = await response.json();
       return result.success;
     } catch (error) {
-      console.warn('Cache write failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return false;
     }
   }
@@ -104,7 +104,7 @@ class MLCacheHelper {
       }
       return null;
     } catch (error) {
-      console.warn('Cache read failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return null;
     }
   }
@@ -124,7 +124,7 @@ class MLCacheHelper {
       const result = await response.json();
       return result.success;
     } catch (error) {
-      console.warn('Cache write failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return false;
     }
   }
@@ -143,7 +143,7 @@ class MLCacheHelper {
       }
       return null;
     } catch (error) {
-      console.warn('Cache read failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return null;
     }
   }
@@ -163,7 +163,7 @@ class MLCacheHelper {
       const result = await response.json();
       return result.success;
     } catch (error) {
-      console.warn('Cache write failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return false;
     }
   }
@@ -183,7 +183,7 @@ class MLCacheHelper {
       const result = await response.json();
       return result.success;
     } catch (error) {
-      console.warn('Cache invalidation failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return false;
     }
   }
@@ -194,7 +194,7 @@ class MLCacheHelper {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.warn('Stats retrieval failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return null;
     }
   }
@@ -208,7 +208,7 @@ class MLCacheHelper {
       const result = await response.json();
       return result.success;
     } catch (error) {
-      console.warn('Cache flush failed:', error.message);
+      // Silently fail if ML backend is unavailable (it's optional)
       return false;
     }
   }
