@@ -1,0 +1,17 @@
+{
+  "name": "ai-terminal-agent-server",
+  "version": "1.0.0",
+  "description": "Backend proxy server for AI Terminal Agent",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2"
+  }
+}
