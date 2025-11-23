@@ -42,6 +42,7 @@ import {
   WebScraperAPI,
   ScraperAPI,
   CoinMarketCapAPI,
+  CoinGeckoAPI,
   SantimentAPI,
   ParallelAPI,
   MCPAPI,
@@ -192,6 +193,12 @@ const API_CONFIG = {
     // Direct API: "https://api.parallel.ai/v1"
     apiKey: localStorage.getItem("parallel_api_key") || "",
   },
+  coinGecko: {
+    // CoinGecko API works directly without proxy (CORS enabled)
+    baseUrl: "https://api.coingecko.com/api/v3",
+    proBaseUrl: "https://pro-api.coingecko.com/api/v3",
+    apiKey: localStorage.getItem("coingecko_api_key") || "",
+  },
 };
 
 // Make API_CONFIG available globally for API classes
@@ -303,27 +310,49 @@ function getSymbolOrError(symbol) {
   return { symbol: null, error: `Unknown cryptocurrency: ${symbol}` };
 }
 
-// Helper to get CMC historical data (converts days to timestamp format)
-async function getCMCHistoricalData(cmcAPI, symbol, days) {
-  const timeEnd = Math.floor(Date.now() / 1000); // Current time in seconds
-  const timeStart = timeEnd - (days * 24 * 60 * 60); // Days ago in seconds
+// Helper to get historical data with CoinGecko fallback
+async function getCMCHistoricalData(cmcAPI, symbol, days, coinGeckoAPIRef = null) {
+  // First try CoinGecko (works without backend proxy)
+  if (coinGeckoAPIRef) {
+    try {
+      const coinId = COIN_SYMBOL_MAP[symbol.toUpperCase()];
+      if (coinId) {
+        const cgData = await coinGeckoAPIRef.getMarketChart(coinId, days);
+        if (cgData && cgData.prices && cgData.prices.length > 0) {
+          return {
+            prices: cgData.prices,
+            volumes: cgData.total_volumes || []
+          };
+        }
+      }
+    } catch (cgError) {
+      // CoinGecko failed, will try CMC as fallback
+      console.warn("CoinGecko fallback failed, trying CMC:", cgError.message);
+    }
+  }
 
-  // Determine interval based on days
-  let interval = "daily";
-  if (days <= 1) interval = "hourly";
-  else if (days <= 7) interval = "hourly";
-  else if (days <= 30) interval = "daily";
-  else interval = "weekly";
+  // Fall back to CMC (requires backend proxy)
+  try {
+    const timeEnd = Math.floor(Date.now() / 1000);
+    const timeStart = timeEnd - (days * 24 * 60 * 60);
 
-  const data = await cmcAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, interval);
+    let interval = "daily";
+    if (days <= 1) interval = "hourly";
+    else if (days <= 7) interval = "hourly";
+    else if (days <= 30) interval = "daily";
+    else interval = "weekly";
 
-  // Convert CMC format to array format similar to CoinGecko's market_chart
-  // CMC returns: { quotes: [{timestamp, quote: {USD: {price, volume_24h, ...}}}] }
-  if (data && data.quotes) {
-    return {
-      prices: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.price]),
-      volumes: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.volume_24h || 0])
-    };
+    const data = await cmcAPI.getHistoricalQuotes(symbol, timeStart, timeEnd, interval);
+
+    if (data && data.quotes) {
+      return {
+        prices: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.price]),
+        volumes: data.quotes.map(q => [q.timestamp * 1000, q.quote.USD.volume_24h || 0])
+      };
+    }
+  } catch (cmcError) {
+    // CMC also failed - return empty data
+    console.warn("CMC API failed:", cmcError.message);
   }
 
   return { prices: [], volumes: [] };
@@ -393,6 +422,7 @@ export default function AITerminalAgent() {
   const scraperAPI = useRef(null);
   const scraperAPIAdvanced = useRef(null);
   const coinMarketCapAPI = useRef(null);
+  const coinGeckoAPI = useRef(null);
   const santimentAPI = useRef(null);
   const parallelAPI = useRef(null);
   const mcpAPI = useRef(null);
@@ -431,6 +461,11 @@ export default function AITerminalAgent() {
     scraperAPI.current = new WebScraperAPI();
     scraperAPIAdvanced.current = new ScraperAPI(API_CONFIG.scraperAPI.apiKey);
     coinMarketCapAPI.current = new CoinMarketCapAPI(API_CONFIG.coinMarketCap.apiKey);
+    coinGeckoAPI.current = new CoinGeckoAPI(
+      API_CONFIG.coinGecko.apiKey,
+      API_CONFIG.coinGecko.baseUrl,
+      API_CONFIG.coinGecko.proBaseUrl
+    );
     santimentAPI.current = new SantimentAPI(API_CONFIG.santiment.apiKey);
     parallelAPI.current = new ParallelAPI(API_CONFIG.parallel.apiKey);
     mcpAPI.current = new MCPAPI();
@@ -2806,7 +2841,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 predictions = cached.predictions;
 
                 // Still need current price for display
-                const marketData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 7);
+                const marketData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 7, coinGeckoAPI.current);
                 prices = marketData.prices.map(p => p[1]);
               } else {
                 // Train new model
@@ -2818,7 +2853,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
                 });
 
                 // Fetch historical price data (90 days for training)
-                const marketData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 90);
+                const marketData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 90, coinGeckoAPI.current);
                 prices = marketData.prices.map(p => p[1]);
 
                 // Validate training data
@@ -2984,7 +3019,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
                 for (const coin of coins) {
                   const coinSymbol = coin.symbol;
-                  const priceData = await getCMCHistoricalData(coinMarketCapAPI.current, coinSymbol, 30);
+                  const priceData = await getCMCHistoricalData(coinMarketCapAPI.current, coinSymbol, 30, coinGeckoAPI.current);
                   const prices = priceData.prices.map(p => p[1]);
                   const volumes = priceData.volumes?.map(v => v[1]) || [];
 
@@ -3024,7 +3059,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               // Fetch market data
-              const priceData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 30);
+              const priceData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 30, coinGeckoAPI.current);
               const prices = priceData.prices.map(p => p[1]);
               const volumes = priceData.total_volumes?.map(v => v[1]) || [];
               const currentPrice = prices[prices.length - 1];
@@ -3177,7 +3212,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               // Fetch historical data
-              const chartData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 30);
+              const chartData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 30, coinGeckoAPI.current);
               const prices = chartData.prices.map(p => p[1]);
               const volumes = chartData.total_volumes?.map(v => v[1]) || [];
               const currentPrice = prices[prices.length - 1];
@@ -3279,7 +3314,7 @@ You have access to cryptocurrency price data, market metrics, and analysis tools
 
             try {
               // Fetch price data (60 days for pattern recognition)
-              const chartData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 60);
+              const chartData = await getCMCHistoricalData(coinMarketCapAPI.current, symbol, 60, coinGeckoAPI.current);
               const prices = chartData.prices.map(p => p[1]);
 
               if (prices.length < 20) {
