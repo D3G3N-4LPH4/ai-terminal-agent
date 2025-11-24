@@ -301,6 +301,39 @@ const COIN_SYMBOL_MAP = {
   ATOM: "ATOM",
 };
 
+// CoinGecko ID mapping (CoinGecko uses slug IDs like "bitcoin", "ethereum")
+const COINGECKO_ID_MAP = {
+  BTC: "bitcoin",
+  ETH: "ethereum",
+  SOL: "solana",
+  USDT: "tether",
+  BNB: "binancecoin",
+  XRP: "ripple",
+  ADA: "cardano",
+  DOGE: "dogecoin",
+  MATIC: "matic-network",
+  DOT: "polkadot",
+  AVAX: "avalanche-2",
+  LINK: "chainlink",
+  UNI: "uniswap",
+  ATOM: "cosmos",
+  SHIB: "shiba-inu",
+  LTC: "litecoin",
+  TRX: "tron",
+  NEAR: "near",
+  APT: "aptos",
+  ARB: "arbitrum",
+  OP: "optimism",
+  FTM: "fantom",
+  AAVE: "aave",
+  CRV: "curve-dao-token",
+  MKR: "maker",
+  SNX: "synthetix-network-token",
+  COMP: "compound-governance-token",
+  SUSHI: "sushi",
+  YFI: "yearn-finance",
+};
+
 // Helper function to convert symbol to CMC format and check validity
 function getSymbolOrError(symbol) {
   const upperSymbol = symbol.toUpperCase();
@@ -315,7 +348,8 @@ async function getCMCHistoricalData(cmcAPI, symbol, days, coinGeckoAPIRef = null
   // First try CoinGecko (works without backend proxy)
   if (coinGeckoAPIRef) {
     try {
-      const coinId = COIN_SYMBOL_MAP[symbol.toUpperCase()];
+      // Use COINGECKO_ID_MAP for proper slug IDs (e.g., "bitcoin" not "BTC")
+      const coinId = COINGECKO_ID_MAP[symbol.toUpperCase()];
       if (coinId) {
         const cgData = await coinGeckoAPIRef.getMarketChart(coinId, days);
         if (cgData && cgData.prices && cgData.prices.length > 0) {

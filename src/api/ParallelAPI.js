@@ -57,13 +57,14 @@ class ParallelAPI {
 
   async task(objective, processor = "base") {
     if (!this.apiKey || this.apiKey.trim() === "") {
-      throw new Error(
-        "Parallel AI API key not configured. Use 'apikeys' command to set it up."
+      throw createError(
+        "Parallel AI API key not configured. Use 'apikeys' command to set it up.",
+        ErrorType.API_KEY_MISSING
       );
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/task`, {
+      const response = await fetchWithTimeout(`${this.baseUrl}/task`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -73,10 +74,10 @@ class ParallelAPI {
           objective: objective,
           processor: processor,
         }),
-      });
+      }, 30000); // 30s timeout
 
       if (!response.ok) {
-        throw new Error(`Parallel Task API error: ${response.statusText}`);
+        await validateAPIResponse(response, 'Parallel AI');
       }
 
       return await response.json();
@@ -88,15 +89,16 @@ class ParallelAPI {
 
   async extract(urls, objective) {
     if (!this.apiKey || this.apiKey.trim() === "") {
-      throw new Error(
-        "Parallel AI API key not configured. Use 'apikeys' command to set it up."
+      throw createError(
+        "Parallel AI API key not configured. Use 'apikeys' command to set it up.",
+        ErrorType.API_KEY_MISSING
       );
     }
 
     try {
       const urlsArray = Array.isArray(urls) ? urls : [urls];
 
-      const response = await fetch(`${this.baseUrl}/extract`, {
+      const response = await fetchWithTimeout(`${this.baseUrl}/extract`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,10 +108,10 @@ class ParallelAPI {
           urls: urlsArray,
           objective: objective,
         }),
-      });
+      }, 30000); // 30s timeout
 
       if (!response.ok) {
-        throw new Error(`Parallel Extract API error: ${response.statusText}`);
+        await validateAPIResponse(response, 'Parallel AI');
       }
 
       return await response.json();

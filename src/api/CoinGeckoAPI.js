@@ -62,13 +62,14 @@ export class CoinGeckoAPI {
 
   async getMarketData(coinId) {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${this.baseUrl}/coins/${coinId}`,
-        { headers: this.getHeaders() }
+        { headers: this.getHeaders() },
+        10000
       );
 
       if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.statusText}`);
+        await validateAPIResponse(response, 'CoinGecko');
       }
 
       return await response.json();
@@ -106,9 +107,10 @@ export class CoinGeckoAPI {
     try {
       // Pro tier has dedicated endpoint, free tier uses market data sorting
       if (this.apiKey) {
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `${this.baseUrl}/coins/top_gainers_losers?vs_currency=usd`,
-          { headers: this.getHeaders() }
+          { headers: this.getHeaders() },
+          10000
         );
 
         if (response.ok) {
@@ -121,13 +123,14 @@ export class CoinGeckoAPI {
       }
 
       // Fallback to free tier method
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${this.baseUrl}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=24h`,
-        { headers: this.getHeaders() }
+        { headers: this.getHeaders() },
+        10000
       );
 
       if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.statusText}`);
+        await validateAPIResponse(response, 'CoinGecko');
       }
 
       const data = await response.json();
@@ -152,13 +155,14 @@ export class CoinGeckoAPI {
 
   async getCategories() {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${this.baseUrl}/coins/categories`,
-        { headers: this.getHeaders() }
+        { headers: this.getHeaders() },
+        10000
       );
 
       if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.statusText}`);
+        await validateAPIResponse(response, 'CoinGecko');
       }
 
       return await response.json();
@@ -170,13 +174,14 @@ export class CoinGeckoAPI {
 
   async getCategoryCoins(categoryId) {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${this.baseUrl}/coins/markets?vs_currency=usd&category=${categoryId}&order=market_cap_desc&per_page=20&page=1&sparkline=false`,
-        { headers: this.getHeaders() }
+        { headers: this.getHeaders() },
+        10000
       );
 
       if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.statusText}`);
+        await validateAPIResponse(response, 'CoinGecko');
       }
 
       return await response.json();
