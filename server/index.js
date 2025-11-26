@@ -72,6 +72,22 @@ app.get('/api/cmc/cryptocurrency/listings/latest', async (req, res) => {
   }
 });
 
+// CMC Trending (latest trending coins)
+app.get('/api/cmc/cryptocurrency/trending/latest', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-cmc_pro_api_key'];
+    if (!apiKey) {
+      return res.status(401).json({ error: 'API key required' });
+    }
+
+    const data = await cmcRequest('/cryptocurrency/trending/latest', req.query, apiKey);
+    res.json(data);
+  } catch (error) {
+    console.error('CMC trending error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // CMC Gainers/Losers
 app.get('/api/cmc/cryptocurrency/trending/gainers-losers', async (req, res) => {
   try {
