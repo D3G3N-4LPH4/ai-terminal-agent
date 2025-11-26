@@ -130,8 +130,18 @@ const API_CONFIG = {
     baseUrl: "https://openrouter.ai/api/v1",
     // OpenRouter supports CORS, no proxy needed
     apiKey: localStorage.getItem("openrouter_api_key") || "",
-    defaultModel: "anthropic/claude-3.5-sonnet",
+    defaultModel: "meta-llama/llama-3.1-8b-instruct:free",
     models: [
+      {
+        id: "meta-llama/llama-3.1-8b-instruct:free",
+        name: "Llama 3.1 8B (Free)",
+        provider: "Meta",
+      },
+      {
+        id: "google/gemini-flash-1.5",
+        name: "Gemini Flash 1.5",
+        provider: "Google",
+      },
       {
         id: "anthropic/claude-3.5-sonnet",
         name: "Claude 3.5 Sonnet",
@@ -142,11 +152,6 @@ const API_CONFIG = {
         id: "meta-llama/llama-3.1-70b-instruct",
         name: "Llama 3.1 70B",
         provider: "Meta",
-      },
-      {
-        id: "google/gemini-pro-1.5",
-        name: "Gemini Pro 1.5",
-        provider: "Google",
       },
       {
         id: "mistralai/mistral-large",

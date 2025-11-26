@@ -4,9 +4,11 @@ import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
 
 export class AnthropicAPI {
-  constructor(apiKey, model = 'claude-3-5-sonnet-20241022') {
+  constructor(apiKey, model = 'claude-3-5-sonnet-20241022', useProxy = true) {
     this.apiKey = apiKey;
-    this.baseUrl = 'https://api.anthropic.com/v1';
+    // Use backend proxy by default to avoid CORS issues
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+    this.baseUrl = useProxy ? `${backendUrl}/api/anthropic` : 'https://api.anthropic.com/v1';
     this.model = model;
     this.apiVersion = '2023-06-01';
   }

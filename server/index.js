@@ -169,6 +169,69 @@ app.post('/api/santiment', async (req, res) => {
   }
 });
 
+// ==================== ANTHROPIC API PROXY ====================
+
+app.post('/api/anthropic/messages', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey) {
+      return res.status(401).json({ error: 'API key required' });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Anthropic API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Anthropic error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== GROQ API PROXY ====================
+
+app.post('/api/groq/chat/completions', async (req, res) => {
+  try {
+    const apiKey = req.headers['authorization'];
+    if (!apiKey) {
+      return res.status(401).json({ error: 'API key required' });
+    }
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': apiKey,
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Groq API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Groq error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== ML CACHE ENDPOINTS ====================
 
 // In-memory cache (replace with Redis for production)
@@ -309,6 +372,8 @@ app.get('/health', (req, res) => {
     endpoints: [
       '/api/cmc/*',
       '/api/santiment',
+      '/api/anthropic/*',
+      '/api/groq/*',
       '/api/ml/*',
     ],
   });
@@ -327,6 +392,8 @@ app.listen(PORT, () => {
 ║  Endpoints:                                                ║
 ║    • /api/cmc/*        - CoinMarketCap proxy               ║
 ║    • /api/santiment    - Santiment GraphQL proxy           ║
+║    • /api/anthropic/*  - Anthropic API proxy (CORS fix)    ║
+║    • /api/groq/*       - Groq API proxy (CORS fix)         ║
 ║    • /api/ml/*         - ML cache endpoints                ║
 ║    • /health           - Health check                      ║
 ║                                                            ║

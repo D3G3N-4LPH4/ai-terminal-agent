@@ -4,9 +4,11 @@ import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
 
 export class GroqAPI {
-  constructor(apiKey, model = 'llama-3.1-70b-versatile') {
+  constructor(apiKey, model = 'llama-3.1-70b-versatile', useProxy = true) {
     this.apiKey = apiKey;
-    this.baseUrl = 'https://api.groq.com/openai/v1';
+    // Use backend proxy by default to avoid CORS issues
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+    this.baseUrl = useProxy ? `${backendUrl}/api/groq` : 'https://api.groq.com/openai/v1';
     this.model = model;
   }
 
