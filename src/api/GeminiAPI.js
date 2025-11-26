@@ -16,19 +16,37 @@ export class GeminiAPI {
 
   /**
    * Convert OpenAI-style messages to Gemini format
+   * Note: v1 API doesn't support systemInstruction, so we prepend system to first user message
    */
   convertMessages(messages) {
     const contents = [];
-    let systemInstruction = '';
+    let systemMessage = '';
+
+    // Extract system message if present
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemMessage = msg.content;
+        break;
+      }
+    }
+
+    // Convert messages, prepending system to first user message
+    let firstUserMessageProcessed = false;
 
     for (const msg of messages) {
       if (msg.role === 'system') {
-        systemInstruction = msg.content;
+        continue; // Skip system messages as they're handled separately
       } else if (msg.role === 'user') {
+        const text = (!firstUserMessageProcessed && systemMessage)
+          ? `${systemMessage}\n\n${msg.content}`
+          : msg.content;
+
         contents.push({
           role: 'user',
-          parts: [{ text: msg.content }],
+          parts: [{ text }],
         });
+
+        firstUserMessageProcessed = true;
       } else if (msg.role === 'assistant') {
         contents.push({
           role: 'model',
@@ -37,7 +55,7 @@ export class GeminiAPI {
       }
     }
 
-    return { contents, systemInstruction };
+    return { contents };
   }
 
   async chat(messages, options = {}) {
@@ -49,7 +67,7 @@ export class GeminiAPI {
     }
 
     try {
-      const { contents, systemInstruction } = this.convertMessages(messages);
+      const { contents } = this.convertMessages(messages);
 
       const requestBody = {
         contents,
@@ -58,13 +76,6 @@ export class GeminiAPI {
           maxOutputTokens: options.maxTokens || 1000,
         },
       };
-
-      // Add system instruction if present
-      if (systemInstruction) {
-        requestBody.systemInstruction = {
-          parts: [{ text: systemInstruction }],
-        };
-      }
 
       // Note: Gemini doesn't support tool calling in same format as OpenRouter
       if (options.tools) {
