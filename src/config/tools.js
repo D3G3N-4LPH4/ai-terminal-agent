@@ -1,4 +1,4 @@
-// Symbol mapping for CoinGecko
+// Symbol mapping for CoinGecko - Synced with AITerminalAgent.jsx COINGECKO_ID_MAP
 const COIN_ID_MAP = {
   BTC: "bitcoin",
   ETH: "ethereum",
@@ -10,6 +10,25 @@ const COIN_ID_MAP = {
   DOGE: "dogecoin",
   MATIC: "matic-network",
   DOT: "polkadot",
+  AVAX: "avalanche-2",
+  LINK: "chainlink",
+  UNI: "uniswap",
+  ATOM: "cosmos",
+  SHIB: "shiba-inu",
+  LTC: "litecoin",
+  BCH: "bitcoin-cash",
+  NEAR: "near",
+  APT: "aptos",
+  ARB: "arbitrum",
+  OP: "optimism",
+  SUI: "sui",
+  TIA: "celestia",
+  SEI: "sei-network",
+  INJ: "injective-protocol",
+  RUNE: "thorchain",
+  FTM: "fantom",
+  AAVE: "aave",
+  MKR: "maker",
 };
 
 const AVAILABLE_TOOLS = [
