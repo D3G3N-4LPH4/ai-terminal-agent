@@ -171,7 +171,7 @@ const API_CONFIG = {
   },
   gemini: {
     apiKey: localStorage.getItem("gemini_api_key") || "",
-    model: "gemini-1.5-flash",
+    model: "gemini-2.0-flash-exp",
   },
   scraperAPI: {
     // Using backend proxy to avoid CORS issues
