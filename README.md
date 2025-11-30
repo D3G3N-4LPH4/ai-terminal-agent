@@ -52,11 +52,18 @@ npm start
 
 Once the terminal is running, use the `apikeys` command to configure:
 
-- CoinGecko API (required for price data)
-- OpenRouter API (for AI chat)
-- ScraperAPI (for web scraping)
-- Parallel AI (for deep research)
-- And more...
+**PRIMARY (Required for core functionality):**
+- **OpenRouter API** - Multi-model AI access (recommended primary)
+- **Anthropic API** - Claude models for high-quality responses
+- **ScraperAPI** - Web scraping and Google Search integration
+
+**OPTIONAL (Free fallbacks & extras):**
+- Groq API - Fast & free AI models
+- Gemini API - Google's free AI models
+- CoinGecko API - Cryptocurrency price data
+- CoinMarketCap API - Advanced crypto metrics
+- Parallel AI - Deep research capabilities
+- Santiment API - On-chain analytics
 
 ## Deployment
 
