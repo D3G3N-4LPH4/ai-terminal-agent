@@ -39,11 +39,18 @@ class ScraperAPI {
         country_code: options.countryCode || "us",
       });
 
+      // Add optional wait time for delayed content (in milliseconds)
+      if (options.wait) {
+        params.set('wait', options.wait);
+      }
+
       // Use backend proxy with API key in header
       const response = await fetch(`${this.baseUrl}?${params.toString()}`, {
         headers: {
           'x-scraper-api-key': cleanKey
-        }
+        },
+        // Increase timeout for complex pages (default 30s, up to 60s for rendered pages)
+        signal: AbortSignal.timeout(options.render === "true" ? 60000 : 30000)
       });
 
       if (!response.ok) {
@@ -60,6 +67,27 @@ class ScraperAPI {
     } catch (error) {
       console.error("ScraperAPI error:", error);
 
+      // Handle timeout errors
+      if (error.name === 'AbortError' || error.message.includes('timeout')) {
+        throw new Error(
+          "ScraperAPI timeout: The page took too long to load.\n\n" +
+            "Solutions:\n" +
+            "- Try again (the site might be slow)\n" +
+            "- Disable JavaScript rendering (render: false)\n" +
+            "- Use a simpler URL"
+        );
+      }
+
+      // Handle rate limit errors
+      if (error.message.includes('429') || error.message.includes('rate limit')) {
+        throw new Error(
+          "ScraperAPI rate limit exceeded.\n\n" +
+            "Your plan's concurrent request limit has been reached.\n" +
+            "Wait a moment and try again."
+        );
+      }
+
+      // Handle CORS errors
       const isCorsError =
         error.message.includes("Failed to fetch") ||
         error.message.includes("CORS");
@@ -97,9 +125,15 @@ class ScraperAPI {
 
   /**
    * Google Search using ScraperAPI Structured Data
+   *
+   * Available ScraperAPI Tools:
+   * - ScraperAPI (general web scraping) - implemented
+   * - Google Search - implemented
+   * - Amazon Search - not yet implemented
+   *
    * @param {string} query - Search query
-   * @param {object} options - Search options (num, country_code, output_format)
-   * @returns {Promise<object>} - Search results
+   * @param {object} options - Search options (num, country_code)
+   * @returns {Promise<object>} - Search results in JSON format
    */
   async googleSearch(query, options = {}) {
     if (!this.apiKey || this.apiKey.trim() === "") {
@@ -124,7 +158,9 @@ class ScraperAPI {
       const response = await fetch(`${this.baseUrl}/google?${params.toString()}`, {
         headers: {
           'x-scraper-api-key': cleanKey
-        }
+        },
+        // 30 second timeout for search results
+        signal: AbortSignal.timeout(30000)
       });
 
       if (!response.ok) {
@@ -138,6 +174,21 @@ class ScraperAPI {
       return data;
     } catch (error) {
       console.error("ScraperAPI Google Search error:", error);
+
+      // Handle timeout errors
+      if (error.name === 'AbortError' || error.message.includes('timeout')) {
+        throw new Error(
+          "ScraperAPI Google Search timeout.\n\nTry again in a moment."
+        );
+      }
+
+      // Handle rate limit errors
+      if (error.message.includes('429') || error.message.includes('rate limit')) {
+        throw new Error(
+          "ScraperAPI rate limit exceeded.\n\nWait a moment and try again."
+        );
+      }
+
       throw error;
     }
   }
