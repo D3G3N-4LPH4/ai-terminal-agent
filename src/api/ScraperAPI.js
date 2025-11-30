@@ -32,16 +32,19 @@ class ScraperAPI {
         cleanKey = cleanKey.split("=").pop();
       }
 
-      // Build ScraperAPI URL with parameters
+      // Build query parameters (API key goes in header now)
       const params = new URLSearchParams({
-        api_key: cleanKey,
         url: url,
         render: options.render || "false", // Set to true for JavaScript rendering
         country_code: options.countryCode || "us",
-        ...options,
       });
 
-      const response = await fetch(`${this.baseUrl}?${params.toString()}`);
+      // Use backend proxy with API key in header
+      const response = await fetch(`${this.baseUrl}?${params.toString()}`, {
+        headers: {
+          'x-scraper-api-key': cleanKey
+        }
+      });
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "Unknown error");
@@ -63,7 +66,7 @@ class ScraperAPI {
       if (isCorsError) {
         throw new Error(
           "CORS Error: ScraperAPI cannot be called directly from the browser.\n\n" +
-            "Solution: You need a backend server to proxy these requests.\n" +
+            "Solution: Backend server not running. Start it with 'npm start'\n" +
             "Alternative: Use the free web scraper (type 'news' or 'trending')"
         );
       }
@@ -115,9 +118,9 @@ class ScraperAPI {
         query: query,
         num: options.num || '10',
         country_code: options.countryCode || 'us',
-        output_format: options.outputFormat || 'json'
       });
 
+      // Use backend proxy for Google Search
       const response = await fetch(`${this.baseUrl}/google?${params.toString()}`, {
         headers: {
           'x-scraper-api-key': cleanKey
