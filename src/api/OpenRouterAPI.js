@@ -1,4 +1,6 @@
 // OpenRouter AI API Client
+// Supports advanced features: model fallbacks, JSON mode, provider preferences,
+// streaming, function calling, and comprehensive LLM parameter controls
 
 import { fetchWithTimeout, fetchWithRetry } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
@@ -28,7 +30,6 @@ export class OpenRouterAPI {
         messages: messages,
         temperature: options.temperature || 0.7,
         max_tokens: options.maxTokens || 1000,
-        ...options,
       };
 
       // Add tools/functions if provided
@@ -43,6 +44,34 @@ export class OpenRouterAPI {
           effort: options.reasoningEffort || "high"
         };
       }
+
+      // JSON Mode - Force JSON responses (limited provider support)
+      if (options.jsonMode) {
+        requestBody.response_format = { type: "json_object" };
+      }
+
+      // Model Fallbacks - Automatic failover for rate limits/errors
+      if (options.fallbackModels && Array.isArray(options.fallbackModels)) {
+        requestBody.models = [this.model, ...options.fallbackModels];
+        requestBody.route = "fallback";
+      }
+
+      // Provider Preferences - Control which provider serves the request
+      if (options.provider) {
+        requestBody.provider = options.provider;
+      }
+
+      // Seed for reproducibility
+      if (options.seed !== undefined) {
+        requestBody.seed = options.seed;
+      }
+
+      // Advanced sampling parameters
+      if (options.top_p !== undefined) requestBody.top_p = options.top_p;
+      if (options.top_k !== undefined) requestBody.top_k = options.top_k;
+      if (options.frequency_penalty !== undefined) requestBody.frequency_penalty = options.frequency_penalty;
+      if (options.presence_penalty !== undefined) requestBody.presence_penalty = options.presence_penalty;
+      if (options.repetition_penalty !== undefined) requestBody.repetition_penalty = options.repetition_penalty;
 
       // Use retry logic for better resilience against transient 500 errors
       const response = await fetchWithRetry(
@@ -220,6 +249,35 @@ export class OpenRouterAPI {
       return await response.json();
     } catch (error) {
       console.error("OpenRouter models error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed generation information including native token counts and costs
+   * OpenRouter normalizes usage data to GPT-4o tokenizer; use this for precise billing
+   * @param {string} generationId - ID from the response
+   * @returns {Promise<Object>} - Detailed generation stats with native token counts
+   */
+  async getGenerationDetails(generationId) {
+    if (!this.apiKey) {
+      throw new Error("OpenRouter API key not configured");
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/generation?id=${generationId}`, {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenRouter API error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("OpenRouter generation details error:", error);
       throw error;
     }
   }
