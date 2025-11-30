@@ -232,6 +232,64 @@ app.post('/api/groq/chat/completions', async (req, res) => {
   }
 });
 
+// ==================== SCRAPERAPI PROXY ====================
+
+// ScraperAPI Base URL scraping
+app.get('/api/scraper', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-scraper-api-key'];
+    if (!apiKey) {
+      return res.status(401).json({ error: 'ScraperAPI key required' });
+    }
+
+    // Forward all query parameters to ScraperAPI
+    const params = new URLSearchParams(req.query);
+    params.set('api_key', apiKey);
+
+    const response = await fetch(`https://api.scraperapi.com?${params.toString()}`);
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new Error(`ScraperAPI error (${response.status}): ${errorText}`);
+    }
+
+    const html = await response.text();
+    res.send(html);
+  } catch (error) {
+    console.error('ScraperAPI error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ScraperAPI Google Search
+app.get('/api/scraper/google', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-scraper-api-key'];
+    if (!apiKey) {
+      return res.status(401).json({ error: 'ScraperAPI key required' });
+    }
+
+    const params = new URLSearchParams(req.query);
+
+    const response = await fetch(`https://api.scraperapi.com/structured/google/search?${params.toString()}`, {
+      headers: {
+        'x-api-key': apiKey
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new Error(`ScraperAPI Google Search error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('ScraperAPI Google Search error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== ML CACHE ENDPOINTS ====================
 
 // In-memory cache (replace with Redis for production)

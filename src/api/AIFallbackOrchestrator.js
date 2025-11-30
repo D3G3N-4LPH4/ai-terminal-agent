@@ -1,5 +1,6 @@
 // AI Fallback Orchestrator
-// Automatically tries multiple AI providers in priority order
+// Primary providers: OpenRouter, Anthropic
+// Optional providers: Groq, Gemini (free fallbacks)
 
 import { OpenRouterAPI } from './OpenRouterAPI.js';
 import { AnthropicAPI } from './AnthropicAPI.js';
@@ -22,7 +23,9 @@ export class AIFallbackOrchestrator {
   }
 
   initializeProviders(config) {
-    // Priority 1: OpenRouter (primary)
+    // PRIMARY PROVIDERS (Required for core functionality)
+
+    // Priority 1: OpenRouter (primary - multi-model access)
     if (config.openRouter?.apiKey) {
       this.providers.push({
         name: 'openrouter',
@@ -33,36 +36,42 @@ export class AIFallbackOrchestrator {
         ),
         tier: 'primary',
         free: false,
+        required: true,
       });
     }
 
-    // Priority 2: Anthropic Direct (best quality fallback)
+    // Priority 2: Anthropic (primary - high quality Claude models)
     if (config.anthropic?.apiKey) {
       this.providers.push({
         name: 'anthropic',
         api: new AnthropicAPI(config.anthropic.apiKey, config.anthropic.model),
-        tier: 'premium',
+        tier: 'primary',
         free: false,
+        required: true,
       });
     }
 
-    // Priority 3: Groq (fast & free)
+    // OPTIONAL PROVIDERS (Free fallbacks - not required)
+
+    // Priority 3: Groq (optional - fast & free)
     if (config.groq?.apiKey) {
       this.providers.push({
         name: 'groq',
         api: new GroqAPI(config.groq.apiKey, config.groq.model),
-        tier: 'fallback',
+        tier: 'optional',
         free: true,
+        required: false,
       });
     }
 
-    // Priority 4: Gemini (reliable & free)
+    // Priority 4: Gemini (optional - free Google AI)
     if (config.gemini?.apiKey) {
       this.providers.push({
         name: 'gemini',
         api: new GeminiAPI(config.gemini.apiKey, config.gemini.model),
-        tier: 'fallback',
+        tier: 'optional',
         free: true,
+        required: false,
       });
     }
   }
@@ -75,10 +84,20 @@ export class AIFallbackOrchestrator {
    * @returns {Promise<Object>} - Chat response
    */
   async chat(messages, options = {}, onProviderSwitch = null) {
+    // Check if any providers are configured
     if (this.providers.length === 0) {
       throw new Error(
-        'No AI providers configured. Please add API keys in "apikeys" settings.'
+        'No AI providers configured.\n\nPrimary providers needed:\n' +
+        '- OpenRouter (recommended)\n' +
+        '- Anthropic Claude\n\n' +
+        'Use "apikeys" command to configure.'
       );
+    }
+
+    // Check if primary providers are available
+    const primaryProviders = this.providers.filter(p => p.tier === 'primary');
+    if (primaryProviders.length === 0) {
+      console.warn('⚠️  No primary providers configured. Using optional fallbacks only.');
     }
 
     let lastError = null;
@@ -89,7 +108,7 @@ export class AIFallbackOrchestrator {
         attemptedProviders.push(provider.name);
 
         // Notify if switching to fallback provider
-        if (provider.tier !== 'primary' && onProviderSwitch) {
+        if (provider.tier === 'optional' && onProviderSwitch) {
           onProviderSwitch(provider.name, provider.tier, provider.free);
         }
 
@@ -123,7 +142,19 @@ export class AIFallbackOrchestrator {
     }
 
     // All providers failed
-    const errorMessage = `All AI providers failed after trying: ${attemptedProviders.join(', ')}.\n\nLast error: ${lastError?.message || 'Unknown error'}`;
+    const primaryFailed = attemptedProviders.filter(name =>
+      this.providers.find(p => p.name === name && p.tier === 'primary')
+    );
+
+    let errorMessage = `All AI providers failed after trying: ${attemptedProviders.join(', ')}.\n\n`;
+
+    if (primaryFailed.length > 0) {
+      errorMessage += `Primary providers that failed: ${primaryFailed.join(', ')}\n`;
+    }
+
+    errorMessage += `\nLast error: ${lastError?.message || 'Unknown error'}\n\n`;
+    errorMessage += 'Ensure your API keys are valid and you have sufficient credits.';
+
     throw new Error(errorMessage);
   }
 
