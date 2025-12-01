@@ -262,6 +262,69 @@ app.get('/api/coingecko-mcp/tools', async (req, res) => {
   }
 });
 
+// ==================== ANTHROPIC API PROXY ====================
+
+app.post('/api/anthropic/messages', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey) {
+      return res.status(401).json({ error: 'API key required' });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Anthropic API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Anthropic error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== GROQ API PROXY ====================
+
+app.post('/api/groq/chat/completions', async (req, res) => {
+  try {
+    const apiKey = req.headers['authorization'];
+    if (!apiKey) {
+      return res.status(401).json({ error: 'API key required' });
+    }
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': apiKey,
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Groq API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Groq error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Proxy endpoint for Santiment (GraphQL)
 app.post('/api/santiment', async (req, res) => {
   const apiKey = req.headers['authorization'];
@@ -817,19 +880,23 @@ app.listen(PORT, async () => {
 ║                                                           ║
 ║   Server running on: http://localhost:${PORT}              ║
 ║                                                           ║
-║   Available endpoints:                                    ║
+║   PRIMARY AI PROVIDERS:                                   ║
+║   • /api/anthropic/messages  - Anthropic Claude          ║
+║   • /api/groq/chat/completions - Groq AI                 ║
+║                                                           ║
+║   DATA & SCRAPING:                                        ║
 ║   • /api/cmc/*       - CoinMarketCap proxy               ║
 ║   • /api/scraper     - ScraperAPI proxy                  ║
+║   • /api/scraper/google - Google Search                  ║
 ║   • /api/santiment   - Santiment GraphQL proxy           ║
+║                                                           ║
+║   ADVANCED FEATURES:                                      ║
 ║   • /api/parallel/*  - Parallel AI proxy                 ║
 ║   • /api/agent/*     - LangGraph AI Agent (stateful)     ║
 ║   • /api/ml/*        - ML Caching Layer (Redis)          ║
 ║   • /health          - Health check                       ║
 ║                                                           ║
 ║   ML Caching: ${redisConnected ? '✓ ENABLED' : '✗ DISABLED'}                             ║
-║                                                           ║
-║   Update your frontend API_CONFIG baseUrls to:           ║
-║   http://localhost:${PORT}/api/[service]                   ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `);
