@@ -1,16 +1,19 @@
 import AITerminalAgent from "./components/AITerminalAgent";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 function App() {
   return (
-    <div
-      style={{
-        backgroundColor: "#111827",
-        minHeight: "100vh",
-        padding: "20px",
-      }}
-    >
-      <AITerminalAgent />
-    </div>
+    <ErrorBoundary>
+      <div
+        style={{
+          backgroundColor: "#111827",
+          minHeight: "100vh",
+          padding: "20px",
+        }}
+      >
+        <AITerminalAgent />
+      </div>
+    </ErrorBoundary>
   );
 }
 

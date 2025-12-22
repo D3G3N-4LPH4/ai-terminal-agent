@@ -1,9 +1,19 @@
-// Anthropic Direct API Client (Premium Fallback)
+/**
+ * Anthropic Direct API Client (Premium Fallback)
+ * Provides access to Claude models via Anthropic's official API
+ * @class AnthropicAPI
+ */
 
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
 
 export class AnthropicAPI {
+  /**
+   * Create an Anthropic API client
+   * @param {string} apiKey - Anthropic API key from console.anthropic.com
+   * @param {string} [model='claude-3-5-sonnet-20241022'] - Default model to use
+   * @param {boolean} [useProxy=true] - Whether to use backend proxy (avoids CORS)
+   */
   constructor(apiKey, model = 'claude-3-5-sonnet-20241022', useProxy = true) {
     this.apiKey = apiKey;
     // Use backend proxy by default to avoid CORS issues
@@ -13,12 +23,19 @@ export class AnthropicAPI {
     this.apiVersion = '2023-06-01';
   }
 
+  /**
+   * Set the model to use for subsequent chat requests
+   * @param {string} modelId - Model identifier (e.g., 'claude-3-5-sonnet-20241022')
+   */
   setModel(modelId) {
     this.model = modelId;
   }
 
   /**
    * Convert OpenAI-style messages to Anthropic format
+   * Separates system messages from user/assistant messages
+   * @param {Array<{role: string, content: string}>} messages - OpenAI-format messages
+   * @returns {{messages: Array, system: string}} Anthropic-format messages with system prompt
    */
   convertMessages(messages) {
     const anthropicMessages = [];
@@ -38,6 +55,17 @@ export class AnthropicAPI {
     return { messages: anthropicMessages, system };
   }
 
+  /**
+   * Send a chat completion request to Anthropic API
+   * @param {Array<{role: string, content: string}>} messages - Chat messages (OpenAI format)
+   * @param {Object} [options={}] - Request options
+   * @param {number} [options.maxTokens=1000] - Maximum tokens to generate
+   * @param {number} [options.temperature=0.7] - Sampling temperature (0-1)
+   * @param {Array} [options.tools] - Tool/function definitions for tool calling
+   * @param {AbortSignal} [options.signal] - AbortSignal for request cancellation
+   * @returns {Promise<string|Object>} Chat completion (string if no tools, object if tools enabled)
+   * @throws {Error} If API key is missing or request fails
+   */
   async chat(messages, options = {}) {
     if (!this.apiKey) {
       throw createError(
@@ -121,7 +149,11 @@ export class AnthropicAPI {
     }
   }
 
-  // Get available models
+  /**
+   * Get list of available Anthropic Claude models
+   * @static
+   * @returns {Array<{id: string, name: string, tier: string}>} Available models with metadata
+   */
   static getAvailableModels() {
     return [
       { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', tier: 'premium' },

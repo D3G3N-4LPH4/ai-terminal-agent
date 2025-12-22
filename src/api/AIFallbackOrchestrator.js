@@ -1,6 +1,13 @@
-// AI Fallback Orchestrator
-// Primary providers: OpenRouter, Anthropic
-// Optional providers: Groq, Gemini (free fallbacks)
+/**
+ * AI Fallback Orchestrator
+ * Manages multiple AI providers with automatic fallback on failures
+ *
+ * Provider Tiers:
+ * - Primary: OpenRouter, Anthropic (required for core functionality)
+ * - Optional: Groq, Gemini (free fallbacks)
+ *
+ * @class AIFallbackOrchestrator
+ */
 
 import { OpenRouterAPI } from './OpenRouterAPI.js';
 import { AnthropicAPI } from './AnthropicAPI.js';
@@ -8,9 +15,20 @@ import { GroqAPI } from './GroqAPI.js';
 import { GeminiAPI } from './GeminiAPI.js';
 
 export class AIFallbackOrchestrator {
+  /**
+   * Create an AI fallback orchestrator
+   * @param {Object} config - Provider configuration object
+   * @param {Object} [config.openRouter] - OpenRouter config with apiKey, baseUrl, defaultModel
+   * @param {Object} [config.anthropic] - Anthropic config with apiKey, model
+   * @param {Object} [config.groq] - Groq config with apiKey, model (optional)
+   * @param {Object} [config.gemini] - Gemini config with apiKey, model (optional)
+   */
   constructor(config) {
+    /** @type {Array<{name: string, api: Object, tier: string, free: boolean, required: boolean}>} */
     this.providers = [];
+    /** @type {string|null} */
     this.lastUsedProvider = null;
+    /** @type {Object<string, {successes: number, failures: number}>} */
     this.providerStats = {
       openrouter: { successes: 0, failures: 0 },
       anthropic: { successes: 0, failures: 0 },
@@ -22,6 +40,12 @@ export class AIFallbackOrchestrator {
     this.initializeProviders(config);
   }
 
+  /**
+   * Initialize AI providers based on configuration
+   * Sets up primary providers (OpenRouter, Anthropic) and optional providers (Groq, Gemini)
+   * @param {Object} config - Provider configuration
+   * @private
+   */
   initializeProviders(config) {
     // PRIMARY PROVIDERS (Required for core functionality)
 

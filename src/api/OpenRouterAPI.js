@@ -4,6 +4,7 @@
 
 import { fetchWithTimeout, fetchWithRetry } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
+import { validateChatMessages, validateAIOptions, validateApiKey } from '../utils/validation.js';
 
 export class OpenRouterAPI {
   constructor(apiKey, baseUrl, defaultModel) {
@@ -25,11 +26,15 @@ export class OpenRouterAPI {
     }
 
     try {
+      // Validate inputs
+      const validatedMessages = validateChatMessages(messages);
+      const validatedOptions = validateAIOptions(options);
+
       const requestBody = {
         model: this.model,
-        messages: messages,
-        temperature: options.temperature || 0.7,
-        max_tokens: options.maxTokens || 1000,
+        messages: validatedMessages,
+        temperature: validatedOptions.temperature || options.temperature || 0.7,
+        max_tokens: validatedOptions.maxTokens || options.maxTokens || 1000,
       };
 
       // Add tools/functions if provided
@@ -66,11 +71,11 @@ export class OpenRouterAPI {
         requestBody.seed = options.seed;
       }
 
-      // Advanced sampling parameters
-      if (options.top_p !== undefined) requestBody.top_p = options.top_p;
-      if (options.top_k !== undefined) requestBody.top_k = options.top_k;
-      if (options.frequency_penalty !== undefined) requestBody.frequency_penalty = options.frequency_penalty;
-      if (options.presence_penalty !== undefined) requestBody.presence_penalty = options.presence_penalty;
+      // Advanced sampling parameters (use validated values if available)
+      if (validatedOptions.top_p !== undefined) requestBody.top_p = validatedOptions.top_p;
+      if (validatedOptions.top_k !== undefined) requestBody.top_k = validatedOptions.top_k;
+      if (validatedOptions.frequency_penalty !== undefined) requestBody.frequency_penalty = validatedOptions.frequency_penalty;
+      if (validatedOptions.presence_penalty !== undefined) requestBody.presence_penalty = validatedOptions.presence_penalty;
       if (options.repetition_penalty !== undefined) requestBody.repetition_penalty = options.repetition_penalty;
 
       // Use retry logic for better resilience against transient 500 errors

@@ -3,14 +3,21 @@
 /**
  * Fetch with automatic timeout protection
  * @param {string} url - The URL to fetch
- * @param {Object} options - Fetch options
+ * @param {Object} options - Fetch options (can include existing signal)
  * @param {number} timeout - Timeout in milliseconds (default: 30000)
  * @returns {Promise<Response>} - Fetch response
  * @throws {Error} - Timeout or network error
  */
 export const fetchWithTimeout = async (url, options = {}, timeout = 30000) => {
+  // Support external AbortController via options.signal
+  const externalSignal = options.signal;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  // If external signal is provided, listen for its abort event
+  if (externalSignal) {
+    externalSignal.addEventListener('abort', () => controller.abort());
+  }
 
   try {
     const response = await fetch(url, {
@@ -23,6 +30,10 @@ export const fetchWithTimeout = async (url, options = {}, timeout = 30000) => {
     clearTimeout(timeoutId);
 
     if (error.name === 'AbortError') {
+      // Check if it was the external signal or timeout
+      if (externalSignal?.aborted) {
+        throw new Error('Request was cancelled');
+      }
       throw new Error(`Request timeout after ${timeout / 1000}s`);
     }
     throw error;
