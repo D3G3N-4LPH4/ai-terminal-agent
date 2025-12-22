@@ -5,6 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 import { FenrirAgent } from './fenrirAgent.js';
 import { createClient } from 'redis';
 
@@ -63,6 +64,35 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// ==================== RATE LIMITING ====================
+
+// General rate limiter for all endpoints (100 requests per 15 minutes)
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
+  legacyHeaders: false, // Disable `X-RateLimit-*` headers
+});
+
+// Strict rate limiter for AI endpoints (30 requests per 15 minutes)
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // Limit each IP to 30 AI requests per windowMs
+  message: {
+    error: 'AI request rate limit exceeded. Please wait before making more requests.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limiting to all routes
+app.use(generalLimiter);
 
 // Health check endpoint for deployment platforms
 app.get('/health', (req, res) => {
@@ -264,7 +294,7 @@ app.get('/api/coingecko-mcp/tools', async (req, res) => {
 
 // ==================== ANTHROPIC API PROXY ====================
 
-app.post('/api/anthropic/messages', async (req, res) => {
+app.post('/api/anthropic/messages', aiLimiter, async (req, res) => {
   try {
     const apiKey = req.headers['x-api-key'];
     if (!apiKey) {
@@ -296,7 +326,7 @@ app.post('/api/anthropic/messages', async (req, res) => {
 
 // ==================== GROQ API PROXY ====================
 
-app.post('/api/groq/chat/completions', async (req, res) => {
+app.post('/api/groq/chat/completions', aiLimiter, async (req, res) => {
   try {
     const apiKey = req.headers['authorization'];
     if (!apiKey) {

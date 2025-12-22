@@ -51,6 +51,16 @@ class ParallelAPI {
       return await response.json();
     } catch (error) {
       console.error("Parallel Search error:", error);
+
+      // Handle CORS errors
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('CORS') || error.name === 'TypeError') {
+        throw createError(
+          "CORS Error: Parallel AI cannot be called directly from the browser.\n\n" +
+          "Solution: Backend server not running. Start it with 'npm start'",
+          ErrorType.NETWORK_ERROR
+        );
+      }
+
       throw error;
     }
   }
@@ -83,6 +93,16 @@ class ParallelAPI {
       return await response.json();
     } catch (error) {
       console.error("Parallel Task error:", error);
+
+      // Handle CORS errors
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('CORS') || error.name === 'TypeError') {
+        throw createError(
+          "CORS Error: Parallel AI cannot be called directly from the browser.\n\n" +
+          "Solution: Backend server not running. Start it with 'npm start'",
+          ErrorType.NETWORK_ERROR
+        );
+      }
+
       throw error;
     }
   }
@@ -117,6 +137,16 @@ class ParallelAPI {
       return await response.json();
     } catch (error) {
       console.error("Parallel Extract error:", error);
+
+      // Handle CORS errors
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('CORS') || error.name === 'TypeError') {
+        throw createError(
+          "CORS Error: Parallel AI cannot be called directly from the browser.\n\n" +
+          "Solution: Backend server not running. Start it with 'npm start'",
+          ErrorType.NETWORK_ERROR
+        );
+      }
+
       throw error;
     }
   }

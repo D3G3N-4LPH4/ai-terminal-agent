@@ -1,6 +1,8 @@
 // CoinGecko MCP (Model Context Protocol) Client
 // Provides AI-native access to CoinGecko data including DEX analytics
 
+import { createError, ErrorType } from '../utils/errorHandler.js';
+
 const getAPIConfig = () => {
   if (typeof window !== 'undefined' && window.API_CONFIG) {
     return window.API_CONFIG;
@@ -57,6 +59,16 @@ class CoinGeckoMCP {
       return data;
     } catch (error) {
       console.error("CoinGecko MCP error:", error);
+
+      // Handle CORS errors
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('CORS') || error.name === 'TypeError') {
+        throw createError(
+          "CORS Error: CoinGecko MCP cannot be called directly from the browser.\n\n" +
+          "Solution: Backend server not running. Start it with 'npm start'",
+          ErrorType.NETWORK_ERROR
+        );
+      }
+
       throw error;
     }
   }
@@ -87,6 +99,16 @@ class CoinGeckoMCP {
       return data;
     } catch (error) {
       console.error("CoinGecko MCP list tools error:", error);
+
+      // Handle CORS errors
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('CORS') || error.name === 'TypeError') {
+        throw createError(
+          "CORS Error: CoinGecko MCP cannot be called directly from the browser.\n\n" +
+          "Solution: Backend server not running. Start it with 'npm start'",
+          ErrorType.NETWORK_ERROR
+        );
+      }
+
       throw error;
     }
   }
