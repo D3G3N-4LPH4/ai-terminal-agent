@@ -6,6 +6,7 @@
 export const ErrorType = {
   API_KEY_MISSING: 'API_KEY_MISSING',
   API_KEY_INVALID: 'API_KEY_INVALID',
+  API_ERROR: 'API_ERROR',
   NETWORK_ERROR: 'NETWORK_ERROR',
   TIMEOUT: 'TIMEOUT',
   RATE_LIMIT: 'RATE_LIMIT',
@@ -29,6 +30,9 @@ const detectErrorType = (error) => {
   }
   if (message.includes('unauthorized') || message.includes('invalid api key') || message.includes('401')) {
     return ErrorType.API_KEY_INVALID;
+  }
+  if (message.includes('server error') || message.includes('500') || message.includes('502') || message.includes('503')) {
+    return ErrorType.API_ERROR;
   }
   if (message.includes('timeout') || message.includes('timed out')) {
     return ErrorType.TIMEOUT;
@@ -229,7 +233,7 @@ export const validateAPIResponse = async (response, apiName) => {
   if (status >= 500) {
     throw createError(
       `${apiName} server error (${status}): ${errorMessage}`,
-      ErrorType.NETWORK_ERROR
+      ErrorType.API_ERROR
     );
   }
 
