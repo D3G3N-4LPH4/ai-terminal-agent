@@ -898,6 +898,19 @@ const __dirname = path.dirname(__filename);
 // Path to Python scraper script
 const PYTHON_SCRAPER_PATH = path.join(__dirname, '..', 'webscrape', 'llm_scraper.py');
 
+// Scraper cache TTL
+const SCRAPER_CACHE_TTL = 3600; // 1 hour
+
+/**
+ * Generate cache key for scraped content
+ * @param {string} url - URL being scraped
+ * @param {string} format - Output format
+ * @returns {string} Cache key
+ */
+const generateScraperCacheKey = (url, format = 'text') => {
+  return `scraper:${format}:${url}`;
+};
+
 /**
  * Execute Python scraper script
  * @param {string[]} args - Command line arguments for Python script
@@ -952,16 +965,40 @@ app.get('/api/python-scraper/health', (req, res) => {
   });
 });
 
-// Main scrape endpoint
+// Main scrape endpoint with caching
 app.post('/api/python-scraper/scrape', generalLimiter, async (req, res) => {
-  const { url, format = 'text', includeMetadata = true } = req.body;
+  const { url, format = 'text', includeMetadata = true, useCache = true } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
   }
 
   try {
+    // Check cache first if enabled and Redis is connected
+    if (useCache && redisConnected) {
+      const cacheKey = generateScraperCacheKey(url, format);
+      const cached = await redisClient.get(cacheKey);
+
+      if (cached) {
+        const result = JSON.parse(cached);
+        result.cached = true;
+        result.cacheKey = cacheKey;
+        console.log(`[Cache Hit] Scraper cache for ${url} (${format})`);
+        return res.json(result);
+      }
+    }
+
+    // Cache miss - scrape the URL
     const result = await executePythonScraper([url, format]);
+    result.cached = false;
+
+    // Store in cache if successful and Redis is connected
+    if (result.status === 'success' && useCache && redisConnected) {
+      const cacheKey = generateScraperCacheKey(url, format);
+      await redisClient.setEx(cacheKey, SCRAPER_CACHE_TTL, JSON.stringify(result));
+      console.log(`[Cache Store] Cached scraper result for ${url} (${format})`);
+    }
+
     res.json(result);
   } catch (error) {
     console.error('Python scraper error:', error);
@@ -1146,6 +1183,100 @@ print(json.dumps(result))
       status: 'error',
       error: error.message
     });
+  }
+});
+
+// Scraper cache management endpoints
+
+// Get cached scraper result
+app.get('/api/scraper-cache/:url', async (req, res) => {
+  const { url } = req.params;
+  const { format = 'text' } = req.query;
+
+  if (!redisConnected) {
+    return res.status(503).json({
+      cached: false,
+      error: 'Cache unavailable'
+    });
+  }
+
+  try {
+    const cacheKey = generateScraperCacheKey(decodeURIComponent(url), format);
+    const data = await redisClient.get(cacheKey);
+
+    if (data) {
+      res.json({
+        cached: true,
+        data: JSON.parse(data)
+      });
+    } else {
+      res.json({
+        cached: false,
+        message: 'No cached result available'
+      });
+    }
+  } catch (error) {
+    console.error('Scraper cache read error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clear scraper cache for URL
+app.delete('/api/scraper-cache/:url', async (req, res) => {
+  const { url } = req.params;
+
+  if (!redisConnected) {
+    return res.status(503).json({
+      success: false,
+      error: 'Cache unavailable'
+    });
+  }
+
+  try {
+    const decodedUrl = decodeURIComponent(url);
+    const formats = ['text', 'json', 'markdown', 'structured'];
+    let deleted = 0;
+
+    for (const format of formats) {
+      const cacheKey = generateScraperCacheKey(decodedUrl, format);
+      const result = await redisClient.del(cacheKey);
+      deleted += result;
+    }
+
+    res.json({
+      success: true,
+      message: `Cleared ${deleted} cache entries for ${decodedUrl}`
+    });
+  } catch (error) {
+    console.error('Scraper cache delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clear all scraper cache
+app.post('/api/scraper-cache/flush', async (req, res) => {
+  if (!redisConnected) {
+    return res.status(503).json({
+      success: false,
+      error: 'Cache unavailable'
+    });
+  }
+
+  try {
+    const pattern = 'scraper:*';
+    const keys = await redisClient.keys(pattern);
+
+    if (keys.length > 0) {
+      await redisClient.del(keys);
+    }
+
+    res.json({
+      success: true,
+      message: `Cleared ${keys.length} scraper cache entries`
+    });
+  } catch (error) {
+    console.error('Scraper cache flush error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
