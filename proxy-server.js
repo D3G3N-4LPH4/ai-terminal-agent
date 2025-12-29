@@ -8,6 +8,9 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { FenrirAgent } from './fenrirAgent.js';
 import { createClient } from 'redis';
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
@@ -887,6 +890,267 @@ app.post('/api/ml/cache/flush', async (req, res) => {
   }
 });
 
+// ==================== PYTHON SCRAPER ENDPOINTS ====================
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Path to Python scraper script
+const PYTHON_SCRAPER_PATH = path.join(__dirname, '..', 'webscrape', 'llm_scraper.py');
+
+/**
+ * Execute Python scraper script
+ * @param {string[]} args - Command line arguments for Python script
+ * @returns {Promise<Object>} - Parsed JSON result from Python script
+ */
+const executePythonScraper = (args) => {
+  return new Promise((resolve, reject) => {
+    const python = spawn('python', [PYTHON_SCRAPER_PATH, ...args]);
+    let stdout = '';
+    let stderr = '';
+
+    python.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    python.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Python scraper failed: ${stderr || 'Unknown error'}`));
+        return;
+      }
+
+      try {
+        // Try to parse JSON output
+        const result = JSON.parse(stdout);
+        resolve(result);
+      } catch (error) {
+        // If not JSON, return as text
+        resolve({
+          status: 'success',
+          data: stdout,
+          format: 'text'
+        });
+      }
+    });
+
+    python.on('error', (error) => {
+      reject(new Error(`Failed to start Python process: ${error.message}`));
+    });
+  });
+};
+
+// Health check for Python scraper
+app.get('/api/python-scraper/health', (req, res) => {
+  res.json({
+    status: 'available',
+    message: 'Python scraper is available',
+    scriptPath: PYTHON_SCRAPER_PATH
+  });
+});
+
+// Main scrape endpoint
+app.post('/api/python-scraper/scrape', generalLimiter, async (req, res) => {
+  const { url, format = 'text', includeMetadata = true } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  try {
+    const result = await executePythonScraper([url, format]);
+    res.json(result);
+  } catch (error) {
+    console.error('Python scraper error:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+// Get links from page
+app.post('/api/python-scraper/links', generalLimiter, async (req, res) => {
+  const { url, filterInternal = false } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  try {
+    // Use Python module mode to call get_links function
+    const python = spawn('python', ['-c', `
+import sys
+sys.path.append('${path.dirname(PYTHON_SCRAPER_PATH)}')
+from llm_scraper import LLMWebScraper
+import json
+
+scraper = LLMWebScraper()
+links = scraper.get_links('${url}', filter_internal=${filterInternal ? 'True' : 'False'})
+print(json.dumps({'status': 'success', 'links': links}))
+    `]);
+
+    let stdout = '';
+    let stderr = '';
+
+    python.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    python.on('close', (code) => {
+      if (code !== 0) {
+        return res.status(500).json({
+          status: 'error',
+          error: stderr || 'Unknown error'
+        });
+      }
+
+      try {
+        const result = JSON.parse(stdout);
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({
+          status: 'error',
+          error: 'Failed to parse Python output'
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Get links error:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+// Search for keywords in page
+app.post('/api/python-scraper/search', generalLimiter, async (req, res) => {
+  const { url, keywords } = req.body;
+
+  if (!url || !keywords || !Array.isArray(keywords)) {
+    return res.status(400).json({ error: 'URL and keywords array are required' });
+  }
+
+  try {
+    const keywordsJson = JSON.stringify(keywords);
+    const python = spawn('python', ['-c', `
+import sys
+sys.path.append('${path.dirname(PYTHON_SCRAPER_PATH)}')
+from llm_scraper import LLMWebScraper
+import json
+
+scraper = LLMWebScraper()
+result = scraper.search_page('${url}', ${keywordsJson})
+print(json.dumps(result))
+    `]);
+
+    let stdout = '';
+    let stderr = '';
+
+    python.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    python.on('close', (code) => {
+      if (code !== 0) {
+        return res.status(500).json({
+          status: 'error',
+          error: stderr || 'Unknown error'
+        });
+      }
+
+      try {
+        const result = JSON.parse(stdout);
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({
+          status: 'error',
+          error: 'Failed to parse Python output'
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+// Extract data with CSS selectors
+app.post('/api/python-scraper/extract', generalLimiter, async (req, res) => {
+  const { url, selectors } = req.body;
+
+  if (!url || !selectors || typeof selectors !== 'object') {
+    return res.status(400).json({ error: 'URL and selectors object are required' });
+  }
+
+  try {
+    const selectorsJson = JSON.stringify(selectors);
+    const python = spawn('python', ['-c', `
+import sys
+sys.path.append('${path.dirname(PYTHON_SCRAPER_PATH)}')
+from llm_scraper import LLMWebScraper
+import json
+
+scraper = LLMWebScraper()
+result = scraper.extract_data('${url}', ${selectorsJson})
+print(json.dumps(result))
+    `]);
+
+    let stdout = '';
+    let stderr = '';
+
+    python.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    python.on('close', (code) => {
+      if (code !== 0) {
+        return res.status(500).json({
+          status: 'error',
+          error: stderr || 'Unknown error'
+        });
+      }
+
+      try {
+        const result = JSON.parse(stdout);
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({
+          status: 'error',
+          error: 'Failed to parse Python output'
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Extract error:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+// ==================== HEALTH CHECK ====================
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
@@ -895,6 +1159,10 @@ app.get('/health', (req, res) => {
     redis: {
       connected: redisConnected,
       mlCaching: redisConnected ? 'enabled' : 'disabled'
+    },
+    pythonScraper: {
+      available: true,
+      scriptPath: PYTHON_SCRAPER_PATH
     }
   });
 });
@@ -918,6 +1186,7 @@ app.listen(PORT, async () => {
 ║   • /api/cmc/*       - CoinMarketCap proxy               ║
 ║   • /api/scraper     - ScraperAPI proxy                  ║
 ║   • /api/scraper/google - Google Search                  ║
+║   • /api/python-scraper/* - Python LLM Scraper (FREE)    ║
 ║   • /api/santiment   - Santiment GraphQL proxy           ║
 ║                                                           ║
 ║   ADVANCED FEATURES:                                      ║
@@ -927,6 +1196,7 @@ app.listen(PORT, async () => {
 ║   • /health          - Health check                       ║
 ║                                                           ║
 ║   ML Caching: ${redisConnected ? '✓ ENABLED' : '✗ DISABLED'}                             ║
+║   Python Scraper: ✓ ENABLED (FREE)                       ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `);
