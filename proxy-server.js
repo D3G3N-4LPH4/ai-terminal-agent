@@ -890,6 +890,73 @@ app.post('/api/ml/cache/flush', async (req, res) => {
   }
 });
 
+// ==================== FENRIR TRADING BOT PROXY ====================
+
+const FENRIR_API_URL = 'http://localhost:8000';
+
+/**
+ * Check if Fenrir API is available
+ * @returns {Promise<boolean>} True if available
+ */
+const checkFenrirHealth = async () => {
+  try {
+    const response = await fetch(`${FENRIR_API_URL}/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(2000)
+    });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+};
+
+/**
+ * Forward all Fenrir API requests to Python backend
+ * Supports: /bot/start, /bot/stop, /bot/status, /bot/positions, /bot/trade, /bot/config
+ */
+app.use('/api/fenrir', async (req, res) => {
+  const endpoint = req.url;
+  const method = req.method;
+
+  try {
+    const fetchOptions = {
+      method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+
+    // Add body for non-GET requests
+    if (method !== 'GET' && method !== 'HEAD') {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+
+    const response = await fetch(`${FENRIR_API_URL}${endpoint}`, fetchOptions);
+    const data = await response.json();
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('[Fenrir Proxy] Error:', error.message);
+    res.status(503).json({
+      error: 'Fenrir API unavailable',
+      message: 'Make sure Python backend is running: python fenrir_api.py',
+      detail: error.message
+    });
+  }
+});
+
+// Health check endpoint for Fenrir integration
+app.get('/api/fenrir-health', async (req, res) => {
+  const isAvailable = await checkFenrirHealth();
+
+  res.json({
+    available: isAvailable,
+    apiUrl: FENRIR_API_URL,
+    status: isAvailable ? 'healthy' : 'unavailable',
+    message: isAvailable
+      ? 'Fenrir API is running'
+      : 'Fenrir API not available. Start with: python fenrir_api.py'
+  });
+});
+
 // ==================== PYTHON SCRAPER ENDPOINTS ====================
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1283,7 +1350,9 @@ app.post('/api/scraper-cache/flush', async (req, res) => {
 // ==================== HEALTH CHECK ====================
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const fenrirAvailable = await checkFenrirHealth();
+
   res.json({
     status: 'OK',
     message: 'Proxy server is running',
@@ -1294,6 +1363,11 @@ app.get('/health', (req, res) => {
     pythonScraper: {
       available: true,
       scriptPath: PYTHON_SCRAPER_PATH
+    },
+    fenrirBot: {
+      available: fenrirAvailable,
+      apiUrl: FENRIR_API_URL,
+      status: fenrirAvailable ? 'connected' : 'disconnected'
     }
   });
 });
@@ -1301,6 +1375,9 @@ app.get('/health', (req, res) => {
 app.listen(PORT, async () => {
   // Initialize Redis for ML caching
   await initRedis();
+
+  // Check Fenrir availability
+  const fenrirAvailable = await checkFenrirHealth();
 
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
@@ -1320,6 +1397,10 @@ app.listen(PORT, async () => {
 ║   • /api/python-scraper/* - Python LLM Scraper (FREE)    ║
 ║   • /api/santiment   - Santiment GraphQL proxy           ║
 ║                                                           ║
+║   TRADING & AUTOMATION:                                   ║
+║   • /api/fenrir/*    - Fenrir Trading Bot (Solana)       ║
+║   • /api/fenrir-health - Fenrir status check             ║
+║                                                           ║
 ║   ADVANCED FEATURES:                                      ║
 ║   • /api/parallel/*  - Parallel AI proxy                 ║
 ║   • /api/agent/*     - LangGraph AI Agent (stateful)     ║
@@ -1328,7 +1409,18 @@ app.listen(PORT, async () => {
 ║                                                           ║
 ║   ML Caching: ${redisConnected ? '✓ ENABLED' : '✗ DISABLED'}                             ║
 ║   Python Scraper: ✓ ENABLED (FREE)                       ║
+║   Fenrir Bot: ${fenrirAvailable ? '✓ CONNECTED' : '✗ DISCONNECTED'}                       ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `);
+
+  if (!fenrirAvailable) {
+    console.log(`
+⚠️  Fenrir Trading Bot not detected
+   Start the Python backend to enable trading features:
+
+   cd "c:\\Users\\pmorr\\OneDrive\\Desktop\\PF-SOL trade code"
+   python fenrir_api.py
+`);
+  }
 });
