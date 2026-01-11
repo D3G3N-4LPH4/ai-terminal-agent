@@ -4,17 +4,35 @@ Complete guide for setting up live trading on pump.fun and bonk.fun with Fenrir 
 
 ## Quick Start
 
-### 1. Generate a Solana Wallet
+### 1. Connect Your Solana Wallet (Recommended - Secure)
+
+#### Option A: Web3 Wallet (Most Secure) 🔒
+
+Install a Solana wallet browser extension:
+
+- 👻 [Phantom](https://phantom.app)
+- ☀️ [Solflare](https://solflare.com)
+
+Then connect:
+
+```bash
+> web3 connect phantom
+```
+
+Benefits:
+
+- ✅ Your private key never leaves your wallet
+- ✅ You approve each transaction individually
+- ✅ No risk of key exposure
+- ✅ Industry-standard security
+
+#### Option B: Legacy Wallet (⚠️ Not Recommended)
 
 ```bash
 > wallet new
 ```
 
-This will generate a new Solana wallet and display:
-- **Public Key** (your wallet address)
-- **Private Key** (⚠️ KEEP SECRET - needed for trading)
-
-**IMPORTANT:** Save both keys securely! The private key controls your funds.
+⚠️ **WARNING:** This stores private keys in browser localStorage which is **insecure** and vulnerable to XSS attacks. Use Web3 wallets instead!
 
 ### 2. Fund Your Wallet
 
@@ -139,16 +157,34 @@ bonk.fun is similar to pump.fun but with different mechanics. The integration wi
 
 ## Trading Commands Reference
 
-### Wallet Management
+### Web3 Wallet (Secure - Recommended)
 
 ```bash
-wallet new                          # Generate new wallet
-wallet import <privateKey>          # Import existing wallet
+web3 connect [phantom|solflare]     # Connect Web3 wallet (secure)
+web3 disconnect                     # Disconnect wallet
+web3 status                         # Show connection status
+web3 balance                        # Check wallet balance
+```
+
+**Why Web3 Wallets?**
+
+- 🔒 Private keys never leave your wallet extension
+- ✅ You approve each transaction individually
+- 🛡️ Protection against XSS attacks
+- 🏆 Industry-standard security
+
+### Legacy Wallet (⚠️ Insecure - Not Recommended)
+
+```bash
+wallet new                          # Generate new wallet (⚠️ stores key)
+wallet import <privateKey>          # Import existing wallet (⚠️ insecure)
 wallet list                         # List all wallets
 wallet balance <publicKey>          # Check balance
 wallet export <name>                # View wallet details
 wallet delete <name>                # Delete wallet
 ```
+
+⚠️ **Security Warning:** Legacy wallet commands store private keys in browser localStorage, which is vulnerable to XSS attacks. Use Web3 wallets instead!
 
 ### Bot Control
 

@@ -271,6 +271,12 @@ export class FenrirTradingAPI {
    * @returns {WebSocket} WebSocket connection
    */
   connectWebSocket(onMessage, onError) {
+    // Close existing WebSocket if it exists to prevent memory leak
+    if (this.websocket) {
+      console.log('[Fenrir] Closing existing WebSocket before creating new one');
+      this.disconnectWebSocket();
+    }
+
     const wsUrl = this.apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
 
     this.websocket = new WebSocket(`${wsUrl}/ws/updates`);
@@ -282,7 +288,16 @@ export class FenrirTradingAPI {
     this.websocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        onMessage(data);
+        if (onMessage && typeof onMessage === 'function') {
+          try {
+            onMessage(data);
+          } catch (callbackError) {
+            console.error('[Fenrir] Error in onMessage callback:', callbackError);
+            if (onError && typeof onError === 'function') {
+              onError(callbackError);
+            }
+          }
+        }
       } catch (error) {
         console.error('[Fenrir] Failed to parse WebSocket message:', error);
       }
@@ -290,11 +305,14 @@ export class FenrirTradingAPI {
 
     this.websocket.onerror = (error) => {
       console.error('[Fenrir] WebSocket error:', error);
-      if (onError) onError(error);
+      if (onError && typeof onError === 'function') {
+        onError(error);
+      }
     };
 
     this.websocket.onclose = () => {
       console.log('[Fenrir] WebSocket disconnected');
+      this.websocket = null; // Clear reference on close
     };
 
     return this.websocket;
@@ -305,7 +323,18 @@ export class FenrirTradingAPI {
    */
   disconnectWebSocket() {
     if (this.websocket) {
-      this.websocket.close();
+      // Remove all event listeners before closing
+      this.websocket.onopen = null;
+      this.websocket.onmessage = null;
+      this.websocket.onerror = null;
+      this.websocket.onclose = null;
+
+      // Close connection if not already closed
+      if (this.websocket.readyState === WebSocket.OPEN ||
+          this.websocket.readyState === WebSocket.CONNECTING) {
+        this.websocket.close();
+      }
+
       this.websocket = null;
     }
   }

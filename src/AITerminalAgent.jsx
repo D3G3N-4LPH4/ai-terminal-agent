@@ -70,6 +70,7 @@ import MultiTimeframeAnalyzer from "./utils/multiTimeframeAnalysis";
 import AlertManager from "./utils/alertSystem";
 import MultiSourceSentimentAggregator from "./utils/multiSourceSentiment";
 import * as WalletUtils from "./utils/solanaWallet";
+import * as Web3Wallet from "./utils/web3Wallet";
 import AutonomousTrader from "./ai/AutonomousTrader";
 import LiveTradingEngine from "./ai/LiveTradingEngine";
 
@@ -1291,14 +1292,19 @@ Category requested: ${toolArgs.category || 'none'}`,
   fenrir config                - Show current bot configuration
   fenrir health                - Check if Python backend is running
 
-🔑 SOLANA WALLET MANAGEMENT
-  wallet new                   - Generate new Solana wallet
-  wallet import [privateKey]   - Import existing wallet
+🌐 WEB3 WALLET (Secure - Recommended)
+  web3 connect [phantom|solflare] - Connect Web3 wallet (secure)
+  web3 disconnect              - Disconnect Web3 wallet
+  web3 status                  - Show connection status
+  web3 balance                 - Check wallet balance
+
+🔑 LEGACY WALLET (⚠️ Insecure - Not Recommended)
+  wallet new                   - Generate new wallet (⚠️ stores private key)
+  wallet import [privateKey]   - Import wallet (⚠️ insecure)
   wallet list                  - List all stored wallets
   wallet balance [publicKey]   - Check wallet balance
-  wallet export [name]         - Export wallet details (⚠️ shows private key)
+  wallet export [name]         - Export wallet (⚠️ exposes private key)
   wallet delete [name]         - Delete wallet from storage
-  wallet airdrop [publicKey] [amount] - Request SOL airdrop (devnet only)
 
 🤖 AUTONOMOUS AI TRADER (Self-Improving)
   ai start [mode]              - Start autonomous AI trader (learns & improves)
@@ -4916,13 +4922,139 @@ The LangGraph agent provides:
             break;
           }
 
+          case "web3": {
+            const subCommand = args[0]?.toLowerCase();
+
+            if (!subCommand) {
+              const available = Web3Wallet.getAvailableWallets();
+              let content = "🌐 WEB3 WALLET CONNECTION\n\n";
+
+              if (available.length > 0) {
+                content += "Available wallets:\n";
+                available.forEach(w => content += `${w.icon} ${w.name}\n`);
+                content += "\nCommands:\n";
+                content += "• web3 connect [phantom|solflare] - Connect Web3 wallet\n";
+                content += "• web3 disconnect - Disconnect wallet\n";
+                content += "• web3 status - Show connection status\n";
+                content += "• web3 balance - Check wallet balance\n\n";
+                content += "🔒 SECURE: Web3 wallets never expose private keys!\n";
+                content += "Keys stay in your browser extension.";
+              } else {
+                content += "❌ No Web3 wallets detected!\n\n";
+                content += "Install a Solana wallet:\n";
+                content += "👻 Phantom: https://phantom.app\n";
+                content += "☀️ Solflare: https://solflare.com\n\n";
+                content += "After installation, refresh the page.";
+              }
+
+              addOutput({ type: "info", content });
+              break;
+            }
+
+            try {
+              switch (subCommand) {
+                case "connect": {
+                  const walletType = args[1]?.toLowerCase() || 'phantom';
+
+                  addOutput({
+                    type: "info",
+                    content: `🔗 Connecting to ${walletType}...\n\nPlease approve the connection in your wallet.`
+                  });
+
+                  const walletInfo = await Web3Wallet.connectWallet(walletType);
+
+                  addOutput({
+                    type: "success",
+                    content: `✅ Connected to ${walletType}!\n\n🔑 Public Key:\n${walletInfo.publicKey}\n\n🔒 SECURE:\n• Your private key never leaves your wallet\n• You approve each transaction individually\n• Use 'web3 disconnect' to disconnect`
+                  });
+
+                  showToast(`Connected to ${walletType}`, "success");
+                  break;
+                }
+
+                case "disconnect": {
+                  const connected = Web3Wallet.getConnectedWallet();
+                  if (!connected) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ No wallet connected"
+                    });
+                    break;
+                  }
+
+                  await Web3Wallet.disconnectWallet(connected.walletType);
+
+                  addOutput({
+                    type: "success",
+                    content: `✅ Disconnected from ${connected.walletType}`
+                  });
+
+                  showToast("Wallet disconnected", "success");
+                  break;
+                }
+
+                case "status": {
+                  const connected = Web3Wallet.getConnectedWallet();
+
+                  if (!connected) {
+                    addOutput({
+                      type: "info",
+                      content: "❌ No wallet connected\n\nUse 'web3 connect' to connect a wallet"
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `✅ Wallet Connected\n\n🌐 Wallet: ${connected.walletType}\n🔑 Public Key:\n${connected.publicKey}\n⏰ Connected: ${new Date(connected.connectedAt).toLocaleString()}`
+                  });
+                  break;
+                }
+
+                case "balance": {
+                  const connected = Web3Wallet.getConnectedWallet();
+
+                  if (!connected) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ No wallet connected\n\nUse 'web3 connect' first"
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: "💰 Fetching balance..."
+                  });
+
+                  const balance = await Web3Wallet.getWeb3Balance(connected.publicKey);
+
+                  addOutput({
+                    type: "success",
+                    content: `💰 WALLET BALANCE\n\n🔑 Address: ${WalletUtils.truncatePublicKey(balance.publicKey)}\n💎 Balance: ${balance.balance} SOL`
+                  });
+                  break;
+                }
+
+                default:
+                  addOutput({
+                    type: "error",
+                    content: `Unknown web3 command: ${subCommand}\n\nUse 'web3' to see available commands`
+                  });
+              }
+            } catch (error) {
+              handleCommandError(error, `web3 ${subCommand}`, addOutput);
+            }
+            break;
+          }
+
           case "wallet": {
             const subCommand = args[0]?.toLowerCase();
 
             if (!subCommand) {
               addOutput({
                 type: "info",
-                content: "🔑 Solana Wallet Management\n\nAvailable commands:\n• wallet new - Generate new wallet\n• wallet import [privateKey] - Import wallet\n• wallet list - List all wallets\n• wallet balance [publicKey] - Check balance\n• wallet export [name] - Export wallet (⚠️ shows private key)\n• wallet delete [name] - Delete wallet\n• wallet airdrop [publicKey] [amount] - Request SOL airdrop (devnet)"
+                content: "🔑 Solana Wallet Management (Legacy)\n\n⚠️ DEPRECATED: Use 'web3 connect' for secure Web3 wallets!\n\nLegacy commands:\n• wallet new - Generate new wallet (⚠️ insecure)\n• wallet import [privateKey] - Import wallet (⚠️ insecure)\n• wallet list - List all wallets\n• wallet balance [publicKey] - Check balance\n• wallet export [name] - Export wallet (⚠️ shows private key)\n• wallet delete [name] - Delete wallet\n• wallet airdrop [publicKey] [amount] - Request SOL airdrop (devnet)\n\n🔒 RECOMMENDED: Use 'web3 connect' instead for secure wallet connection!"
               });
               break;
             }
@@ -5450,10 +5582,49 @@ The LangGraph agent provides:
                     break;
                   }
 
+                  // Validate value ranges
+                  const validationRules = {
+                    buyAmount: { min: 0.001, max: 100, unit: 'SOL' },
+                    stopLoss: { min: 0.01, max: 0.99, unit: '%', multiply: 100 },
+                    takeProfit: { min: 0.01, max: 10, unit: '%', multiply: 100 },
+                    trailingStop: { min: 0.01, max: 0.5, unit: '%', multiply: 100 },
+                    minLiquidity: { min: 0, max: 1000, unit: 'SOL' },
+                    maxMarketCap: { min: 1, max: 100000, unit: 'SOL' }
+                  };
+
+                  const rule = validationRules[key];
+                  if (numValue < rule.min || numValue > rule.max) {
+                    const displayMin = rule.multiply ? (rule.min * rule.multiply).toFixed(0) : rule.min;
+                    const displayMax = rule.multiply ? (rule.max * rule.multiply).toFixed(0) : rule.max;
+                    addOutput({
+                      type: "error",
+                      content: `❌ Invalid value for ${key}\n\nMust be between ${displayMin}${rule.unit} and ${displayMax}${rule.unit}\n\nYou provided: ${rule.multiply ? (numValue * rule.multiply).toFixed(1) : numValue}${rule.unit}`
+                    });
+                    break;
+                  }
+
+                  // Additional validation for logical relationships
+                  if (key === 'takeProfit' && numValue <= liveTradingEngine.current.stopLoss) {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Take profit (${(numValue * 100).toFixed(1)}%) must be greater than stop loss (${(liveTradingEngine.current.stopLoss * 100).toFixed(1)}%)`
+                    });
+                    break;
+                  }
+
+                  if (key === 'stopLoss' && numValue >= liveTradingEngine.current.takeProfit) {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Stop loss (${(numValue * 100).toFixed(1)}%) must be less than take profit (${(liveTradingEngine.current.takeProfit * 100).toFixed(1)}%)`
+                    });
+                    break;
+                  }
+
                   liveTradingEngine.current[key] = numValue;
+                  const displayValue = rule.multiply ? `${(numValue * rule.multiply).toFixed(1)}${rule.unit}` : `${numValue} ${rule.unit}`;
                   addOutput({
                     type: "success",
-                    content: `✓ Configuration Updated\n\n${key} = ${numValue}`
+                    content: `✓ Configuration Updated\n\n${key} = ${displayValue}`
                   });
                   showToast(`Config updated: ${key}`, "success");
                   break;
