@@ -12,6 +12,7 @@ export { CoinGeckoAPI } from './CoinGeckoAPI.js';
 export { SantimentAPI } from './SantimentAPI.js';
 export { ParallelAPI } from './ParallelAPI.js';
 export { default as MCPAPI } from './MCPAPI.js';
+export { FenrirTradingAPI } from './FenrirTradingAPI.js';
 
 // Re-export defaults for convenience
 export { default as OpenRouterAPIDefault } from './OpenRouterAPI.js';
@@ -25,3 +26,4 @@ export { default as CoinGeckoAPIDefault } from './CoinGeckoAPI.js';
 export { default as SantimentAPIDefault } from './SantimentAPI.js';
 export { default as ParallelAPIDefault } from './ParallelAPI.js';
 export { default as MCPAPIDefault } from './MCPAPI.js';
+export { default as FenrirTradingAPIDefault } from './FenrirTradingAPI.js';

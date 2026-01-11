@@ -46,6 +46,7 @@ import {
   SantimentAPI,
   ParallelAPI,
   MCPAPI,
+  FenrirTradingAPI,
 } from "./api";
 import { AIFallbackOrchestrator } from "./api/AIFallbackOrchestrator";
 
@@ -465,6 +466,7 @@ export default function AITerminalAgent() {
   const santimentAPI = useRef(null);
   const parallelAPI = useRef(null);
   const mcpAPI = useRef(null);
+  const fenrirTradingAPI = useRef(null);
 
   // ML Service refs
   const mlService = useRef(null);
@@ -508,6 +510,7 @@ export default function AITerminalAgent() {
     santimentAPI.current = new SantimentAPI(API_CONFIG.santiment.apiKey);
     parallelAPI.current = new ParallelAPI(API_CONFIG.parallel.apiKey);
     mcpAPI.current = new MCPAPI();
+    fenrirTradingAPI.current = new FenrirTradingAPI();
 
     // Initialize ML Services
     mlService.current = new MLService();
@@ -1262,6 +1265,14 @@ Category requested: ${toolArgs.category || 'none'}`,
   alert stats                  - Alert statistics
   alert remove [id]            - Remove specific alert
   alert clear                  - Clear all alerts
+
+⚔️ FENRIR TRADING BOT (Solana/pump.fun)
+  fenrir start [mode]          - Start trading bot (simulation/conservative/aggressive/degen)
+  fenrir stop                  - Stop the trading bot
+  fenrir status                - Get bot status and portfolio summary
+  fenrir positions             - View all open positions
+  fenrir config                - Show current bot configuration
+  fenrir health                - Check if Python backend is running
 
 ᛗ SYSTEM RUNES
   apikeys                      - Inscribe your keys
@@ -4649,6 +4660,215 @@ The LangGraph agent provides:
               output += `  • memory clear   - Forget all conversations\n`;
 
               addOutput({ type: "info", content: output });
+            }
+            break;
+          }
+
+          case "fenrir": {
+            const subCommand = args[0]?.toLowerCase();
+
+            if (!subCommand) {
+              addOutput({
+                type: "error",
+                content: "⚔️ Fenrir Trading Bot\n\nAvailable commands:\n• fenrir start [mode] - Start bot (simulation/conservative/aggressive/degen)\n• fenrir stop - Stop the bot\n• fenrir status - Portfolio summary\n• fenrir positions - Open positions\n• fenrir config - Bot configuration\n• fenrir health - Check backend status"
+              });
+              break;
+            }
+
+            try {
+              switch (subCommand) {
+                case "health": {
+                  addOutput({
+                    type: "info",
+                    content: "⚔️ Checking Fenrir backend status..."
+                  });
+
+                  const health = await fenrirTradingAPI.current.checkHealth();
+
+                  if (health.available) {
+                    addOutput({
+                      type: "success",
+                      content: `✓ Fenrir Trading Bot Connected\n\nᛟ Backend Status: ${health.status}\nᛟ API URL: ${health.apiUrl}\nᛟ Message: ${health.message}`
+                    });
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `✗ Fenrir Backend Unavailable\n\nᛪ Status: ${health.status}\nᛪ API URL: ${health.apiUrl}\nᛪ Message: ${health.message}\n\nᛉ Start the Python backend:\n  cd "c:\\Users\\pmorr\\OneDrive\\Desktop\\PF-SOL trade code"\n  python fenrir_api.py`
+                    });
+                  }
+                  break;
+                }
+
+                case "start": {
+                  const mode = args[1]?.toLowerCase() || "simulation";
+                  const validModes = ["simulation", "conservative", "aggressive", "degen"];
+
+                  if (!validModes.includes(mode)) {
+                    addOutput({
+                      type: "error",
+                      content: `Invalid mode: ${mode}\n\nValid modes: simulation, conservative, aggressive, degen`
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `⚔️ Starting Fenrir in ${mode.toUpperCase()} mode...`
+                  });
+
+                  const result = await fenrirTradingAPI.current.startBot({
+                    mode,
+                    buyAmountSol: mode === "simulation" ? 0.1 : mode === "conservative" ? 0.05 : mode === "aggressive" ? 0.2 : 0.5,
+                    stopLossPct: 25.0,
+                    takeProfitPct: mode === "degen" ? 300.0 : 100.0,
+                    trailingStopPct: 15.0
+                  });
+
+                  if (result.status === "success") {
+                    addOutput({
+                      type: "success",
+                      content: `✓ Fenrir Started Successfully!\n\nᛟ Mode: ${mode.toUpperCase()}${mode === "simulation" ? " (Paper Trading - No Real Funds)" : ""}\nᛟ Message: ${result.message}\n\nᛉ Use 'fenrir status' to monitor performance`
+                    });
+                    showToast(`Fenrir started in ${mode} mode`, "success");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `✗ Failed to start Fenrir\n\nᛪ Error: ${result.error || result.message}`
+                    });
+                  }
+                  break;
+                }
+
+                case "stop": {
+                  addOutput({
+                    type: "info",
+                    content: "⚔️ Stopping Fenrir Trading Bot..."
+                  });
+
+                  const result = await fenrirTradingAPI.current.stopBot();
+
+                  if (result.status === "success") {
+                    addOutput({
+                      type: "success",
+                      content: `✓ Fenrir Stopped\n\nᛟ Message: ${result.message}`
+                    });
+                    showToast("Fenrir stopped", "success");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `✗ Failed to stop Fenrir\n\nᛪ Error: ${result.error || result.message}`
+                    });
+                  }
+                  break;
+                }
+
+                case "status": {
+                  addOutput({
+                    type: "info",
+                    content: "⚔️ Fetching Fenrir status..."
+                  });
+
+                  const status = await fenrirTradingAPI.current.getStatus();
+
+                  if (status.error) {
+                    addOutput({
+                      type: "error",
+                      content: `✗ Failed to get status\n\nᛪ Error: ${status.error}`
+                    });
+                    break;
+                  }
+
+                  const portfolio = status.portfolio || {};
+                  const pnlColor = (portfolio.total_pnl_pct || 0) >= 0 ? "+" : "";
+
+                  addOutput({
+                    type: "info",
+                    content: `⚔️ FENRIR TRADING BOT STATUS\n\nᛟ Bot Status: ${status.is_running ? "🟢 RUNNING" : "🔴 STOPPED"}\nᛟ Mode: ${status.mode || "N/A"}\n\n💼 PORTFOLIO SUMMARY:\nᛏ Total Invested: ${portfolio.total_invested_sol || 0} SOL\nᛏ Current Value: ${portfolio.current_value_sol || 0} SOL\nᛏ Total P&L: ${pnlColor}${(portfolio.total_pnl_pct || 0).toFixed(2)}% (${pnlColor}${(portfolio.total_pnl_sol || 0).toFixed(4)} SOL)\nᛏ Open Positions: ${portfolio.open_positions || 0}\nᛏ Closed Positions: ${portfolio.closed_positions || 0}\nᛏ Win Rate: ${((portfolio.win_rate || 0) * 100).toFixed(1)}%`
+                  });
+                  break;
+                }
+
+                case "positions": {
+                  addOutput({
+                    type: "info",
+                    content: "⚔️ Fetching open positions..."
+                  });
+
+                  const result = await fenrirTradingAPI.current.getPositions();
+
+                  if (result.error) {
+                    addOutput({
+                      type: "error",
+                      content: `✗ Failed to get positions\n\nᛪ Error: ${result.error}`
+                    });
+                    break;
+                  }
+
+                  const positions = result.positions || [];
+
+                  if (positions.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "⚔️ No open positions"
+                    });
+                    break;
+                  }
+
+                  let output = `⚔️ OPEN POSITIONS (${positions.length})\n\n`;
+
+                  positions.forEach((pos, idx) => {
+                    const pnlColor = (pos.unrealized_pnl_pct || 0) >= 0 ? "+" : "";
+                    const ageMinutes = Math.floor((Date.now() - new Date(pos.entry_time).getTime()) / 60000);
+
+                    output += `${idx + 1}. ${pos.symbol || "Unknown"}\n`;
+                    output += `   ᛏ Token: ${pos.token_address?.substring(0, 8)}...${pos.token_address?.substring(pos.token_address.length - 6)}\n`;
+                    output += `   ᛏ Entry: ${pos.entry_price?.toFixed(8)} SOL (${pos.amount_sol} SOL)\n`;
+                    output += `   ᛏ Current: ${pos.current_price?.toFixed(8)} SOL\n`;
+                    output += `   ᛏ P&L: ${pnlColor}${(pos.unrealized_pnl_pct || 0).toFixed(2)}% (${pnlColor}${(pos.unrealized_pnl_sol || 0).toFixed(4)} SOL)\n`;
+                    output += `   ᛏ Hold Time: ${ageMinutes} minutes\n`;
+                    if (pos.stop_loss) output += `   ᛏ Stop Loss: ${pos.stop_loss.toFixed(8)} SOL\n`;
+                    if (pos.take_profit) output += `   ᛏ Take Profit: ${pos.take_profit.toFixed(8)} SOL\n`;
+                    output += `\n`;
+                  });
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "config": {
+                  addOutput({
+                    type: "info",
+                    content: "⚔️ Fetching bot configuration..."
+                  });
+
+                  const config = await fenrirTradingAPI.current.getConfig();
+
+                  if (config.error) {
+                    addOutput({
+                      type: "error",
+                      content: `✗ Failed to get config\n\nᛪ Error: ${config.error}`
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `⚔️ FENRIR BOT CONFIGURATION\n\nᛟ Trading Mode: ${config.mode || "N/A"}\nᛟ Buy Amount: ${config.buy_amount_sol || 0} SOL\nᛟ Stop Loss: ${config.stop_loss_pct || 0}%\nᛟ Take Profit: ${config.take_profit_pct || 0}%\nᛟ Trailing Stop: ${config.trailing_stop_pct || 0}%\nᛟ Max Position Age: ${config.max_position_age_minutes || 0} minutes\nᛟ Min Liquidity: ${config.min_initial_liquidity_sol || 0} SOL\nᛟ Max Market Cap: ${config.max_initial_market_cap_sol || 0} SOL`
+                  });
+                  break;
+                }
+
+                default:
+                  addOutput({
+                    type: "error",
+                    content: `Unknown Fenrir command: ${subCommand}\n\nUse 'fenrir' to see available commands`
+                  });
+              }
+            } catch (error) {
+              handleCommandError(error, `fenrir ${subCommand}`, addOutput);
             }
             break;
           }
