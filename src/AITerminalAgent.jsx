@@ -69,6 +69,7 @@ import MLCacheHelper from "./utils/mlCacheHelper";
 import MultiTimeframeAnalyzer from "./utils/multiTimeframeAnalysis";
 import AlertManager from "./utils/alertSystem";
 import MultiSourceSentimentAggregator from "./utils/multiSourceSentiment";
+import * as WalletUtils from "./utils/solanaWallet";
 
 // Import ML modules
 import {
@@ -1273,6 +1274,15 @@ Category requested: ${toolArgs.category || 'none'}`,
   fenrir positions             - View all open positions
   fenrir config                - Show current bot configuration
   fenrir health                - Check if Python backend is running
+
+🔑 SOLANA WALLET MANAGEMENT
+  wallet new                   - Generate new Solana wallet
+  wallet import [privateKey]   - Import existing wallet
+  wallet list                  - List all stored wallets
+  wallet balance [publicKey]   - Check wallet balance
+  wallet export [name]         - Export wallet details (⚠️ shows private key)
+  wallet delete [name]         - Delete wallet from storage
+  wallet airdrop [publicKey] [amount] - Request SOL airdrop (devnet only)
 
 ᛗ SYSTEM RUNES
   apikeys                      - Inscribe your keys
@@ -4869,6 +4879,247 @@ The LangGraph agent provides:
               }
             } catch (error) {
               handleCommandError(error, `fenrir ${subCommand}`, addOutput);
+            }
+            break;
+          }
+
+          case "wallet": {
+            const subCommand = args[0]?.toLowerCase();
+
+            if (!subCommand) {
+              addOutput({
+                type: "info",
+                content: "🔑 Solana Wallet Management\n\nAvailable commands:\n• wallet new - Generate new wallet\n• wallet import [privateKey] - Import wallet\n• wallet list - List all wallets\n• wallet balance [publicKey] - Check balance\n• wallet export [name] - Export wallet (⚠️ shows private key)\n• wallet delete [name] - Delete wallet\n• wallet airdrop [publicKey] [amount] - Request SOL airdrop (devnet)"
+              });
+              break;
+            }
+
+            try {
+              switch (subCommand) {
+                case "new": {
+                  addOutput({
+                    type: "info",
+                    content: "🔑 Generating new Solana wallet..."
+                  });
+
+                  const wallet = await WalletUtils.generateWallet();
+
+                  addOutput({
+                    type: "success",
+                    content: `✓ Wallet Generated Successfully!\n\n🔑 Public Key:\n${wallet.publicKey}\n\n🔐 Private Key (⚠️ KEEP SECRET):\n${wallet.privateKey}\n\n⚠️ IMPORTANT:\n• Save your private key in a secure location\n• Never share your private key with anyone\n• This wallet is stored in browser localStorage\n• Use 'wallet export default' to view it again`
+                  });
+
+                  // Save to storage
+                  WalletUtils.saveWalletToStorage(wallet, 'default');
+                  showToast("Wallet created and saved", "success");
+                  break;
+                }
+
+                case "import": {
+                  const privateKey = args[1];
+
+                  if (!privateKey) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ Private key required\n\nUsage: wallet import <privateKey>"
+                    });
+                    break;
+                  }
+
+                  if (!WalletUtils.isValidPrivateKey(privateKey)) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ Invalid private key format\n\nSolana private keys should be 87-88 characters in base58 format"
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: "🔑 Importing wallet..."
+                  });
+
+                  const wallet = await WalletUtils.importWallet(privateKey, 'imported');
+
+                  addOutput({
+                    type: "success",
+                    content: `✓ Wallet Imported Successfully!\n\n🔑 Public Key:\n${wallet.publicKey}\n\n✓ Wallet saved as 'imported'`
+                  });
+
+                  showToast("Wallet imported", "success");
+                  break;
+                }
+
+                case "list": {
+                  const wallets = WalletUtils.listStoredWallets();
+
+                  if (wallets.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "No wallets found\n\nCreate one with: wallet new"
+                    });
+                    break;
+                  }
+
+                  let output = `🔑 STORED WALLETS (${wallets.length})\n\n`;
+
+                  wallets.forEach((wallet, idx) => {
+                    const shortKey = WalletUtils.truncatePublicKey(wallet.publicKey);
+                    const date = new Date(wallet.createdAt).toLocaleDateString();
+
+                    output += `${idx + 1}. ${wallet.name}\n`;
+                    output += `   Public Key: ${shortKey}\n`;
+                    output += `   Created: ${date}\n\n`;
+                  });
+
+                  output += `\nℹ️ Use 'wallet balance <publicKey>' to check balance`;
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "balance": {
+                  const publicKey = args[1];
+
+                  if (!publicKey) {
+                    // Try to get default wallet
+                    const defaultWallet = WalletUtils.loadWalletFromStorage('default');
+                    if (!defaultWallet) {
+                      addOutput({
+                        type: "error",
+                        content: "❌ No default wallet found\n\nUsage: wallet balance <publicKey>\nor create a wallet first: wallet new"
+                      });
+                      break;
+                    }
+                    args[1] = defaultWallet.publicKey;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `🔑 Fetching balance for ${WalletUtils.truncatePublicKey(args[1])}...`
+                  });
+
+                  const balance = await WalletUtils.getWalletBalance(args[1]);
+
+                  addOutput({
+                    type: "success",
+                    content: `💰 WALLET BALANCE\n\n🔑 Address: ${WalletUtils.truncatePublicKey(balance.publicKey)}\n💎 Balance: ${balance.balance} SOL\n📊 Lamports: ${balance.balanceLamports.toLocaleString()}\n🌐 RPC: ${balance.rpcUrl}`
+                  });
+                  break;
+                }
+
+                case "export": {
+                  const name = args[1] || 'default';
+                  const wallet = WalletUtils.loadWalletFromStorage(name);
+
+                  if (!wallet) {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Wallet '${name}' not found\n\nUse 'wallet list' to see available wallets`
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "warning",
+                    content: `⚠️ WALLET EXPORT - ${name}\n\n🔑 Public Key:\n${wallet.publicKey}\n\n🔐 Private Key (⚠️ KEEP SECRET):\n${wallet.privateKey}\n\n⚠️ WARNING:\n• Never share your private key\n• Anyone with this key can access your funds\n• Clear your terminal after viewing: type 'clear'`
+                  });
+                  break;
+                }
+
+                case "delete": {
+                  const name = args[1];
+
+                  if (!name) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ Wallet name required\n\nUsage: wallet delete <name>"
+                    });
+                    break;
+                  }
+
+                  const wallet = WalletUtils.loadWalletFromStorage(name);
+
+                  if (!wallet) {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Wallet '${name}' not found`
+                    });
+                    break;
+                  }
+
+                  const success = WalletUtils.deleteWalletFromStorage(name);
+
+                  if (success) {
+                    addOutput({
+                      type: "success",
+                      content: `✓ Wallet '${name}' deleted\n\n⚠️ Make sure you have backed up the private key!`
+                    });
+                    showToast("Wallet deleted", "success");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: "❌ Failed to delete wallet"
+                    });
+                  }
+                  break;
+                }
+
+                case "airdrop": {
+                  const publicKey = args[1];
+                  const amount = parseFloat(args[2]) || 1;
+
+                  if (!publicKey) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ Public key required\n\nUsage: wallet airdrop <publicKey> [amount]"
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `🪂 Requesting ${amount} SOL airdrop to ${WalletUtils.truncatePublicKey(publicKey)}...\n\n⚠️ Only works on devnet/testnet!`
+                  });
+
+                  try {
+                    const response = await fetch('http://localhost:3001/api/fenrir/wallet/airdrop', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ publicKey, amount })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                      addOutput({
+                        type: "success",
+                        content: `✓ Airdrop Successful!\n\n💎 Amount: ${result.amount} SOL\n📝 Signature: ${result.signature}\n\nℹ️ Use 'wallet balance ${publicKey}' to verify`
+                      });
+                      showToast("Airdrop received", "success");
+                    } else {
+                      addOutput({
+                        type: "error",
+                        content: `❌ Airdrop Failed\n\n${result.message}\n\n${result.hint || ''}`
+                      });
+                    }
+                  } catch (error) {
+                    handleCommandError(error, 'wallet airdrop', addOutput);
+                  }
+                  break;
+                }
+
+                default:
+                  addOutput({
+                    type: "error",
+                    content: `Unknown wallet command: ${subCommand}\n\nUse 'wallet' to see available commands`
+                  });
+              }
+            } catch (error) {
+              handleCommandError(error, `wallet ${subCommand}`, addOutput);
             }
             break;
           }

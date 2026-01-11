@@ -957,6 +957,142 @@ app.get('/api/fenrir-health', async (req, res) => {
   });
 });
 
+// ==================== SOLANA WALLET ENDPOINTS ====================
+
+/**
+ * Generate new Solana wallet
+ * Returns publicKey and privateKey (base58 encoded)
+ */
+app.post('/api/fenrir/wallet/generate', async (req, res) => {
+  try {
+    // Dynamic import of @solana/web3.js
+    const { Keypair } = await import('@solana/web3.js');
+    const bs58 = await import('bs58');
+
+    const keypair = Keypair.generate();
+    const publicKey = keypair.publicKey.toString();
+    const privateKey = bs58.default.encode(keypair.secretKey);
+
+    res.json({
+      publicKey,
+      privateKey,
+      createdAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Wallet] Generation error:', error);
+    res.status(500).json({
+      error: 'Failed to generate wallet',
+      message: error.message,
+      hint: 'Make sure @solana/web3.js and bs58 are installed: npm install @solana/web3.js bs58'
+    });
+  }
+});
+
+/**
+ * Import wallet from private key
+ * Validates and returns public key
+ */
+app.post('/api/fenrir/wallet/import', async (req, res) => {
+  try {
+    const { privateKey } = req.body;
+
+    if (!privateKey) {
+      return res.status(400).json({ error: 'Private key is required' });
+    }
+
+    const { Keypair } = await import('@solana/web3.js');
+    const bs58 = await import('bs58');
+
+    // Decode base58 private key
+    const secretKey = bs58.default.decode(privateKey);
+    const keypair = Keypair.fromSecretKey(secretKey);
+    const publicKey = keypair.publicKey.toString();
+
+    res.json({
+      publicKey,
+      privateKey,
+      importedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Wallet] Import error:', error);
+    res.status(400).json({
+      error: 'Invalid private key',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get wallet balance
+ * Fetches SOL balance from Solana RPC
+ */
+app.get('/api/fenrir/wallet/balance/:publicKey', async (req, res) => {
+  try {
+    const { publicKey } = req.params;
+    const { Connection, PublicKey, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
+
+    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const connection = new Connection(rpcUrl, 'confirmed');
+
+    const pubKey = new PublicKey(publicKey);
+    const balance = await connection.getBalance(pubKey);
+
+    res.json({
+      publicKey,
+      balance: balance / LAMPORTS_PER_SOL,
+      balanceLamports: balance,
+      rpcUrl
+    });
+  } catch (error) {
+    console.error('[Wallet] Balance error:', error);
+    res.status(400).json({
+      error: 'Failed to fetch balance',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Airdrop SOL (devnet/testnet only)
+ * For testing purposes
+ */
+app.post('/api/fenrir/wallet/airdrop', async (req, res) => {
+  try {
+    const { publicKey, amount = 1 } = req.body;
+
+    if (!publicKey) {
+      return res.status(400).json({ error: 'Public key is required' });
+    }
+
+    const { Connection, PublicKey, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
+
+    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+    const connection = new Connection(rpcUrl, 'confirmed');
+
+    const pubKey = new PublicKey(publicKey);
+    const signature = await connection.requestAirdrop(
+      pubKey,
+      amount * LAMPORTS_PER_SOL
+    );
+
+    await connection.confirmTransaction(signature);
+
+    res.json({
+      success: true,
+      signature,
+      amount,
+      message: `Airdropped ${amount} SOL to ${publicKey}`
+    });
+  } catch (error) {
+    console.error('[Wallet] Airdrop error:', error);
+    res.status(500).json({
+      error: 'Airdrop failed',
+      message: error.message,
+      hint: 'Airdrops only work on devnet/testnet'
+    });
+  }
+});
+
 // ==================== PYTHON SCRAPER ENDPOINTS ====================
 
 const __filename = fileURLToPath(import.meta.url);
