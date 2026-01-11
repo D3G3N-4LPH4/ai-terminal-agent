@@ -70,6 +70,7 @@ import MultiTimeframeAnalyzer from "./utils/multiTimeframeAnalysis";
 import AlertManager from "./utils/alertSystem";
 import MultiSourceSentimentAggregator from "./utils/multiSourceSentiment";
 import * as WalletUtils from "./utils/solanaWallet";
+import AutonomousTrader from "./ai/AutonomousTrader";
 
 // Import ML modules
 import {
@@ -468,6 +469,7 @@ export default function AITerminalAgent() {
   const parallelAPI = useRef(null);
   const mcpAPI = useRef(null);
   const fenrirTradingAPI = useRef(null);
+  const autonomousTrader = useRef(null);
 
   // ML Service refs
   const mlService = useRef(null);
@@ -512,6 +514,11 @@ export default function AITerminalAgent() {
     parallelAPI.current = new ParallelAPI(API_CONFIG.parallel.apiKey);
     mcpAPI.current = new MCPAPI();
     fenrirTradingAPI.current = new FenrirTradingAPI();
+    autonomousTrader.current = new AutonomousTrader({
+      learningRate: 0.1,
+      explorationRate: 0.2,
+      discountFactor: 0.95
+    });
 
     // Initialize ML Services
     mlService.current = new MLService();
@@ -1283,6 +1290,15 @@ Category requested: ${toolArgs.category || 'none'}`,
   wallet export [name]         - Export wallet details (⚠️ shows private key)
   wallet delete [name]         - Delete wallet from storage
   wallet airdrop [publicKey] [amount] - Request SOL airdrop (devnet only)
+
+🤖 AUTONOMOUS AI TRADER (Self-Improving)
+  ai start [mode]              - Start autonomous AI trader (learns & improves)
+  ai stop                      - Stop AI and save learning
+  ai performance               - View AI performance metrics
+  ai strategy                  - View current AI strategy
+  ai decisions                 - View recent AI decisions
+  ai reset                     - Reset AI learning (start fresh)
+  ai explain                   - Explain AI's current state
 
 ᛗ SYSTEM RUNES
   apikeys                      - Inscribe your keys
@@ -5120,6 +5136,142 @@ The LangGraph agent provides:
               }
             } catch (error) {
               handleCommandError(error, `wallet ${subCommand}`, addOutput);
+            }
+            break;
+          }
+
+          case "ai": {
+            const subCommand = args[0]?.toLowerCase();
+
+            if (!subCommand) {
+              addOutput({
+                type: "info",
+                content: "🤖 Autonomous AI Trader\n\nSelf-improving trading AI using Reinforcement Learning\n\nCommands:\n• ai start [mode] - Start autonomous trader\n• ai stop - Stop and save learning\n• ai performance - View metrics\n• ai strategy - Current strategy\n• ai decisions - Recent decisions\n• ai reset - Reset learning\n• ai explain - Explain AI state"
+              });
+              break;
+            }
+
+            try {
+              switch (subCommand) {
+                case "start": {
+                  const mode = args[1] || 'simulation';
+                  addOutput({
+                    type: "info",
+                    content: `🤖 Starting Autonomous AI Trader in ${mode} mode...\n\n⚠️ The AI will:\n• Observe market conditions\n• Make trading decisions autonomously\n• Learn from outcomes (Q-Learning)\n• Optimize strategy over time\n• Save learning to localStorage`
+                  });
+
+                  const result = await autonomousTrader.current.start(mode, {
+                    startingCapital: 1.0
+                  });
+
+                  addOutput({
+                    type: "success",
+                    content: `✓ Autonomous AI Started!\n\nMode: ${result.mode}\nLearning Rate: ${result.config.positionSizing.baseAmount}\nExploration: ${autonomousTrader.current.explorationRate.toFixed(2)}\n\n🧠 AI is now trading and learning...`
+                  });
+                  showToast("Autonomous AI started", "success");
+                  break;
+                }
+
+                case "stop": {
+                  addOutput({
+                    type: "info",
+                    content: "🛑 Stopping Autonomous AI..."
+                  });
+
+                  const result = await autonomousTrader.current.stop();
+
+                  addOutput({
+                    type: "success",
+                    content: `✓ AI Stopped & Learning Saved\n\n📊 Final Results:\nROI: ${result.roi}%\nPortfolio Value: ${result.finalPortfolioValue.toFixed(4)} SOL\nTotal Trades: ${result.performance.totalTrades}\nWin Rate: ${(result.performance.winningTrades / result.performance.totalTrades * 100).toFixed(1)}%`
+                  });
+                  showToast("AI stopped", "success");
+                  break;
+                }
+
+                case "performance": {
+                  const perf = autonomousTrader.current.getPerformance();
+
+                  addOutput({
+                    type: "info",
+                    content: `🤖 AUTONOMOUS AI PERFORMANCE\n\n💰 Portfolio:\nStarting Capital: ${perf.startingCapital.toFixed(4)} SOL\nCurrent Value: ${perf.portfolioValue.toFixed(4)} SOL\nROI: ${perf.roi.toFixed(2)}%\nP&L: ${perf.profitLoss.toFixed(4)} SOL\n\n📊 Trading Stats:\nTotal Trades: ${perf.totalTrades}\nWins: ${perf.winningTrades} (${(perf.winRate * 100).toFixed(1)}%)\nLosses: ${perf.losingTrades}\nLargest Win: ${perf.largestWin.toFixed(4)} SOL\nLargest Loss: ${perf.largestLoss.toFixed(4)} SOL\n\n📈 Risk Metrics:\nSharpe Ratio: ${perf.sharpeRatio.toFixed(2)}\nMax Drawdown: ${(perf.maxDrawdown * 100).toFixed(1)}%\nConsecutive Wins: ${perf.consecutiveWins}\nConsecutive Losses: ${perf.consecutiveLosses}\n\n🧠 AI Learning:\nQ-Table Size: ${perf.qTableSize} states\nExploration Rate: ${(perf.explorationRate * 100).toFixed(1)}%`
+                  });
+                  break;
+                }
+
+                case "strategy": {
+                  const perf = autonomousTrader.current.getPerformance();
+                  const strat = perf.currentStrategy;
+
+                  addOutput({
+                    type: "info",
+                    content: `🎯 CURRENT AI STRATEGY\n\n💼 Position Sizing:\nBase Amount: ${strat.positionSizing.baseAmount.toFixed(4)} SOL\nMax Positions: ${strat.positionSizing.maxPositions}\nRisk Per Trade: ${(strat.positionSizing.riskPerTrade * 100).toFixed(1)}%\n\n🚪 Entry Criteria:\nMin Liquidity: ${strat.entryThresholds.minLiquidity} SOL\nMax Market Cap: ${strat.entryThresholds.maxMarketCap} SOL\nMax Age: ${strat.entryThresholds.maxAge}s\n\n🚨 Exit Conditions:\nStop Loss: ${(strat.exitConditions.stopLoss * 100).toFixed(1)}%\nTake Profit: ${(strat.exitConditions.takeProfit * 100).toFixed(1)}%\nTrailing Stop: ${(strat.exitConditions.trailingStop * 100).toFixed(1)}%\nMax Hold Time: ${strat.exitConditions.maxHoldTime} min`
+                  });
+                  break;
+                }
+
+                case "decisions": {
+                  const decisions = autonomousTrader.current.getDecisionHistory(5);
+
+                  if (decisions.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "No decisions yet. Start the AI first: ai start simulation"
+                    });
+                    break;
+                  }
+
+                  let output = `🧠 RECENT AI DECISIONS (Last 5)\n\n`;
+
+                  decisions.forEach((d, i) => {
+                    const time = new Date(d.timestamp).toLocaleTimeString();
+                    output += `${i + 1}. [${time}]\n`;
+                    output += `   Action: ${d.action}\n`;
+                    output += `   Reward: ${d.reward.toFixed(4)}\n`;
+                    output += `   Portfolio: ${d.portfolioValue.toFixed(4)} SOL\n`;
+                    output += `   Exploration: ${(d.explorationRate * 100).toFixed(1)}%\n\n`;
+                  });
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "reset": {
+                  localStorage.removeItem('autonomous_trader_learning');
+                  autonomousTrader.current = new AutonomousTrader({
+                    learningRate: 0.1,
+                    explorationRate: 0.2,
+                    discountFactor: 0.95
+                  });
+
+                  addOutput({
+                    type: "warning",
+                    content: "⚠️ AI Learning Reset\n\nAll Q-values, trade history, and learned strategies have been erased.\n\nThe AI will start learning from scratch."
+                  });
+                  showToast("AI reset", "success");
+                  break;
+                }
+
+                case "explain": {
+                  const perf = autonomousTrader.current.getPerformance();
+
+                  addOutput({
+                    type: "info",
+                    content: `🤖 AI EXPLAINABILITY\n\n🧠 How the AI Works:\nThe Autonomous Trader uses Q-Learning (Reinforcement Learning) to improve over time.\n\nState Observation:\n• Monitors portfolio value, open positions\n• Tracks win rate, drawdowns, volatility\n• Observes time of day and streaks\n\nAction Selection:\n• Epsilon-greedy: ${(perf.explorationRate * 100).toFixed(1)}% exploration\n• Learns Q-values for each state-action pair\n• Chooses actions that maximize expected reward\n\nLearning Process:\n• Q(s,a) = Q(s,a) + α[r + γ*max(Q(s',a')) - Q(s,a)]\n• α (learning rate): ${autonomousTrader.current.learningRate}\n• γ (discount): ${autonomousTrader.current.discountFactor}\n\nStrategy Optimization:\n• Adjusts based on win rate and Sharpe ratio\n• Tightens stops after losses\n• Increases size after wins (cautiously)\n\nPersistence:\n• Q-table saved to localStorage\n• Learns across sessions\n• ${perf.qTableSize} states learned so far`
+                  });
+                  break;
+                }
+
+                default:
+                  addOutput({
+                    type: "error",
+                    content: `Unknown AI command: ${subCommand}\n\nUse 'ai' to see available commands`
+                  });
+              }
+            } catch (error) {
+              handleCommandError(error, `ai ${subCommand}`, addOutput);
             }
             break;
           }
