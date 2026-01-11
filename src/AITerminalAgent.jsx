@@ -71,6 +71,7 @@ import AlertManager from "./utils/alertSystem";
 import MultiSourceSentimentAggregator from "./utils/multiSourceSentiment";
 import * as WalletUtils from "./utils/solanaWallet";
 import AutonomousTrader from "./ai/AutonomousTrader";
+import LiveTradingEngine from "./ai/LiveTradingEngine";
 
 // Import ML modules
 import {
@@ -470,6 +471,7 @@ export default function AITerminalAgent() {
   const mcpAPI = useRef(null);
   const fenrirTradingAPI = useRef(null);
   const autonomousTrader = useRef(null);
+  const liveTradingEngine = useRef(null);
 
   // ML Service refs
   const mlService = useRef(null);
@@ -518,6 +520,13 @@ export default function AITerminalAgent() {
       learningRate: 0.1,
       explorationRate: 0.2,
       discountFactor: 0.95
+    });
+    liveTradingEngine.current = new LiveTradingEngine({
+      mode: 'simulation', // Start in simulation mode
+      buyAmount: 0.05,
+      stopLoss: 0.25,
+      takeProfit: 1.0,
+      trailingStop: 0.15
     });
 
     // Initialize ML Services
@@ -1299,6 +1308,14 @@ Category requested: ${toolArgs.category || 'none'}`,
   ai decisions                 - View recent AI decisions
   ai reset                     - Reset AI learning (start fresh)
   ai explain                   - Explain AI's current state
+
+🔍 LIVE TRADING SCANNER (pump.fun & bonk.fun)
+  scan start [mode]            - Start live scanner (simulation/live)
+  scan stop                    - Stop scanner
+  scan status                  - View scanner status and positions
+  scan tokens                  - List discovered tokens
+  scan config [key]=[value]    - Update configuration
+  scan stats                   - Trading statistics
 
 ᛗ SYSTEM RUNES
   apikeys                      - Inscribe your keys
@@ -5272,6 +5289,207 @@ The LangGraph agent provides:
               }
             } catch (error) {
               handleCommandError(error, `ai ${subCommand}`, addOutput);
+            }
+            break;
+          }
+
+          case "scan": {
+            const subCommand = args[0]?.toLowerCase();
+
+            try {
+              if (!subCommand || subCommand === "help") {
+                addOutput({
+                  type: "info",
+                  content: `🔍 LIVE TRADING SCANNER\n\n📡 Real-time token discovery on pump.fun and bonk.fun\n\nCommands:\n  scan start <mode>      Start scanner (simulation/live)\n  scan stop              Stop scanner\n  scan status            View scanner status and positions\n  scan tokens            List discovered tokens\n  scan config <key>=<val> Update configuration\n  scan stats             Trading statistics\n\nExamples:\n  > scan start simulation\n  > scan start live\n  > scan status\n  > scan config buyAmount=0.1\n  > scan stats\n\n⚠️  Always test in simulation mode before using live mode with real money!`
+                });
+                break;
+              }
+
+              switch (subCommand) {
+                case "start": {
+                  const mode = args[1]?.toLowerCase() || 'simulation';
+
+                  if (!['simulation', 'live'].includes(mode)) {
+                    addOutput({
+                      type: "error",
+                      content: `Invalid mode: ${mode}\n\nValid modes: simulation, live`
+                    });
+                    break;
+                  }
+
+                  if (mode === 'live') {
+                    addOutput({
+                      type: "warning",
+                      content: `⚠️  LIVE MODE WARNING\n\nYou are about to start live trading with real money!\n\nMake sure:\n• Your wallet has sufficient SOL\n• You understand the risks\n• Stop loss and take profit are configured\n• You are ready to monitor positions\n\nStarting in 3 seconds...`
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                  }
+
+                  liveTradingEngine.current.mode = mode;
+                  await liveTradingEngine.current.start();
+
+                  const config = liveTradingEngine.current.getConfig();
+                  addOutput({
+                    type: "success",
+                    content: `✓ Live Scanner Started!\n\n📡 Mode: ${mode.toUpperCase()}\n💰 Buy Amount: ${config.buyAmount} SOL\n🛑 Stop Loss: ${(config.stopLoss * 100).toFixed(1)}%\n🎯 Take Profit: ${(config.takeProfit * 100).toFixed(1)}%\n📈 Trailing Stop: ${(config.trailingStop * 100).toFixed(1)}%\n\n🔍 Scanning pump.fun and bonk.fun for new tokens...\n\n${mode === 'simulation' ? '🧪 Simulation mode - No real money at risk' : '💸 LIVE mode - Trading with real money!'}`
+                  });
+                  showToast(`Scanner started in ${mode} mode`, "success");
+                  break;
+                }
+
+                case "stop": {
+                  await liveTradingEngine.current.stop();
+                  addOutput({
+                    type: "success",
+                    content: `✓ Live Scanner Stopped\n\nAll scanning and monitoring has been stopped.`
+                  });
+                  showToast("Scanner stopped", "success");
+                  break;
+                }
+
+                case "status": {
+                  const status = liveTradingEngine.current.getStatus();
+                  const positions = Array.from(liveTradingEngine.current.activePositions.values());
+
+                  let output = `📊 SCANNER STATUS\n\n`;
+                  output += `Status: ${status.isRunning ? '🟢 Running' : '🔴 Stopped'}\n`;
+                  output += `Mode: ${status.mode.toUpperCase()}\n`;
+                  output += `Tokens Scanned: ${status.stats.tokensScanned}\n`;
+                  output += `Trades Executed: ${status.stats.tradesExecuted}\n`;
+                  output += `Active Positions: ${positions.length}\n\n`;
+
+                  if (positions.length > 0) {
+                    output += `📈 ACTIVE POSITIONS:\n`;
+                    output += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+                    for (const pos of positions) {
+                      const pnlPercent = ((pos.currentPrice - pos.entryPrice) / pos.entryPrice * 100).toFixed(2);
+                      const pnlSOL = ((pos.currentPrice - pos.entryPrice) * pos.amount).toFixed(4);
+                      output += `${pos.symbol || WalletUtils.truncatePublicKey(pos.tokenAddress)}\n`;
+                      output += `  Entry: ${pos.entryPrice.toFixed(6)} SOL\n`;
+                      output += `  Current: ${pos.currentPrice.toFixed(6)} SOL\n`;
+                      output += `  P&L: ${pnlPercent >= 0 ? '🟢' : '🔴'} ${pnlPercent}% (${pnlSOL} SOL)\n`;
+                      output += `  Hold Time: ${Math.floor((Date.now() - pos.entryTime) / 60000)} min\n\n`;
+                    }
+                  } else {
+                    output += `No active positions\n`;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "tokens": {
+                  const tokens = Array.from(liveTradingEngine.current.scannedTokens.values()).slice(-10);
+
+                  if (tokens.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: `No tokens discovered yet.\n\nMake sure the scanner is running: scan start simulation`
+                    });
+                    break;
+                  }
+
+                  let output = `🔍 DISCOVERED TOKENS (Last 10):\n`;
+                  output += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+                  for (const token of tokens) {
+                    output += `${token.symbol || 'Unknown'}\n`;
+                    output += `  Address: ${WalletUtils.truncatePublicKey(token.address)}\n`;
+                    output += `  Platform: ${token.platform}\n`;
+                    output += `  Liquidity: ${token.liquidity ? token.liquidity.toFixed(2) + ' SOL' : 'Unknown'}\n`;
+                    output += `  Risk Score: ${token.riskScore ? (token.riskScore * 100).toFixed(1) + '%' : 'Unknown'}\n`;
+                    output += `  Discovered: ${new Date(token.discovered).toLocaleTimeString()}\n\n`;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "config": {
+                  if (!args[1]) {
+                    const config = liveTradingEngine.current.getConfig();
+                    addOutput({
+                      type: "info",
+                      content: `⚙️  SCANNER CONFIGURATION\n\n💰 Buy Amount: ${config.buyAmount} SOL\n🛑 Stop Loss: ${(config.stopLoss * 100).toFixed(1)}%\n🎯 Take Profit: ${(config.takeProfit * 100).toFixed(1)}%\n📈 Trailing Stop: ${(config.trailingStop * 100).toFixed(1)}%\n⏱️  Scan Interval: ${config.scanInterval / 1000}s\n💧 Min Liquidity: ${config.minLiquidity} SOL\n📊 Max Market Cap: ${config.maxMarketCap} SOL\n\nUpdate: scan config <key>=<value>`
+                    });
+                    break;
+                  }
+
+                  // Parse key=value
+                  const [key, value] = args[1].split('=');
+                  if (!key || !value) {
+                    addOutput({
+                      type: "error",
+                      content: `Invalid format. Use: scan config <key>=<value>\n\nExample: scan config buyAmount=0.1`
+                    });
+                    break;
+                  }
+
+                  const numValue = parseFloat(value);
+                  if (isNaN(numValue)) {
+                    addOutput({
+                      type: "error",
+                      content: `Invalid value: ${value}. Must be a number.`
+                    });
+                    break;
+                  }
+
+                  const validKeys = ['buyAmount', 'stopLoss', 'takeProfit', 'trailingStop', 'minLiquidity', 'maxMarketCap'];
+                  if (!validKeys.includes(key)) {
+                    addOutput({
+                      type: "error",
+                      content: `Invalid config key: ${key}\n\nValid keys: ${validKeys.join(', ')}`
+                    });
+                    break;
+                  }
+
+                  liveTradingEngine.current[key] = numValue;
+                  addOutput({
+                    type: "success",
+                    content: `✓ Configuration Updated\n\n${key} = ${numValue}`
+                  });
+                  showToast(`Config updated: ${key}`, "success");
+                  break;
+                }
+
+                case "stats": {
+                  const stats = liveTradingEngine.current.getStats();
+
+                  let output = `📊 TRADING STATISTICS\n`;
+                  output += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                  output += `🔍 Tokens Scanned: ${stats.tokensScanned}\n`;
+                  output += `💰 Trades Executed: ${stats.tradesExecuted}\n`;
+                  output += `✅ Winning Trades: ${stats.winningTrades}\n`;
+                  output += `❌ Losing Trades: ${stats.losingTrades}\n`;
+                  output += `📈 Win Rate: ${stats.tradesExecuted > 0 ? ((stats.winningTrades / stats.tradesExecuted) * 100).toFixed(1) : 0}%\n\n`;
+                  output += `💵 Total P&L: ${stats.totalPnL >= 0 ? '🟢' : '🔴'} ${stats.totalPnL.toFixed(4)} SOL\n`;
+                  output += `📊 ROI: ${stats.roi.toFixed(2)}%\n`;
+                  output += `🏆 Best Trade: ${stats.bestTrade.toFixed(4)} SOL\n`;
+                  output += `💔 Worst Trade: ${stats.worstTrade.toFixed(4)} SOL\n\n`;
+                  output += `⏱️  Running Time: ${Math.floor(stats.runningTime / 60000)} minutes\n`;
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                default:
+                  addOutput({
+                    type: "error",
+                    content: `Unknown scan command: ${subCommand}\n\nUse 'scan' to see available commands`
+                  });
+              }
+            } catch (error) {
+              handleCommandError(error, `scan ${subCommand}`, addOutput);
             }
             break;
           }

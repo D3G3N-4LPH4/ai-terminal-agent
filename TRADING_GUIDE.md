@@ -161,6 +161,79 @@ fenrir positions                    # Open positions
 fenrir config                       # View configuration
 ```
 
+### Live Scanner (pump.fun & bonk.fun)
+
+```bash
+scan start <mode>                   # Start scanner (simulation/live)
+scan stop                           # Stop scanner
+scan status                         # Scanner status and positions
+scan tokens                         # List discovered tokens
+scan config <key>=<value>           # Update configuration
+scan stats                          # Trading statistics
+```
+
+**Scanner Modes:**
+
+- `simulation` - Paper trading with fake money (safe for testing)
+- `live` - Real trading with real SOL (⚠️ use with caution)
+
+**Examples:**
+```bash
+# Start scanner in simulation mode (recommended first)
+> scan start simulation
+
+# Check what tokens were discovered
+> scan tokens
+
+# View active positions and P&L
+> scan status
+
+# Update buy amount to 0.1 SOL per trade
+> scan config buyAmount=0.1
+
+# View trading statistics
+> scan stats
+
+# Stop scanner
+> scan stop
+
+# Start live trading (real money!)
+> scan start live
+```
+
+### Autonomous AI Trader
+
+```bash
+ai start <mode>                     # Start AI trader (learns & improves)
+ai stop                             # Stop AI and save learning
+ai performance                      # View performance metrics
+ai strategy                         # View current strategy
+ai decisions                        # View recent decisions
+ai reset                            # Reset learning (start fresh)
+ai explain                          # Explain AI's current state
+```
+
+**AI Modes:**
+
+- `conservative` - Low risk (0.05 SOL/trade)
+- `aggressive` - Medium risk (0.2 SOL/trade)
+- `degen` - High risk (0.5 SOL/trade)
+
+**Examples:**
+```bash
+# Start AI in conservative mode
+> ai start conservative
+
+# Check AI performance
+> ai performance
+
+# See what the AI is learning
+> ai decisions
+
+# Stop and save learning
+> ai stop
+```
+
 ### Monitoring
 
 ```bash
