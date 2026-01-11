@@ -56,6 +56,8 @@ export class LiveTradingEngine {
       failedTrades: 0,
       totalProfit: 0,
       totalLoss: 0,
+      bestTrade: 0,
+      worstTrade: 0,
       lastScanTime: null,
       uptime: 0
     };
@@ -90,11 +92,17 @@ export class LiveTradingEngine {
     this.isRunning = true;
     this.startTime = Date.now();
 
-    // Start scanning loop
-    this.scanLoop();
+    // Start scanning loop (store promise for cleanup)
+    this.scanLoopPromise = this.scanLoop().catch(error => {
+      console.error('❌ Scan loop error:', error);
+      this.isRunning = false;
+    });
 
-    // Start position monitoring loop
-    this.monitorLoop();
+    // Start position monitoring loop (store promise for cleanup)
+    this.monitorLoopPromise = this.monitorLoop().catch(error => {
+      console.error('❌ Monitor loop error:', error);
+      this.isRunning = false;
+    });
 
     return {
       status: 'started',
@@ -109,6 +117,24 @@ export class LiveTradingEngine {
   async stop() {
     console.log('🛑 Stopping trading engine...');
     this.isRunning = false;
+
+    // Wait for loops to finish
+    try {
+      if (this.scanLoopPromise) {
+        await Promise.race([
+          this.scanLoopPromise,
+          new Promise(resolve => setTimeout(resolve, 5000)) // 5 second timeout
+        ]);
+      }
+      if (this.monitorLoopPromise) {
+        await Promise.race([
+          this.monitorLoopPromise,
+          new Promise(resolve => setTimeout(resolve, 5000)) // 5 second timeout
+        ]);
+      }
+    } catch (error) {
+      console.error('⚠️ Error waiting for loops to stop:', error);
+    }
 
     // Close all positions if in live mode
     if (this.mode === 'live') {
@@ -545,6 +571,7 @@ export class LiveTradingEngine {
           tokenAddress: token.address,
           token: token,
           entryPrice: result.price || token.price,
+          currentPrice: result.price || token.price, // Initialize with entry price
           entryTime: Date.now(),
           amount: this.buyAmount,
           tokensOwned: result.amount || (this.buyAmount / (token.price || 0.001)),
@@ -552,7 +579,8 @@ export class LiveTradingEngine {
           stopLoss: (result.price || token.price) * (1 - this.stopLoss),
           takeProfit: (result.price || token.price) * (1 + this.takeProfit),
           trailingStopPrice: null,
-          highestPrice: result.price || token.price
+          highestPrice: result.price || token.price,
+          symbol: token.symbol || null
         };
 
         this.activePositions.set(token.address, position);
@@ -604,6 +632,9 @@ export class LiveTradingEngine {
       if (!currentPrice) {
         return;
       }
+
+      // Update position's current price for status display
+      position.currentPrice = currentPrice;
 
       // Update highest price for trailing stop
       if (currentPrice > position.highestPrice) {
@@ -705,8 +736,17 @@ export class LiveTradingEngine {
         if (pnl > 0) {
           this.stats.successfulTrades++;
           this.stats.totalProfit += pnl;
+          // Track best trade
+          if (!this.stats.bestTrade || pnl > this.stats.bestTrade) {
+            this.stats.bestTrade = pnl;
+          }
         } else {
+          this.stats.failedTrades++;
           this.stats.totalLoss += Math.abs(pnl);
+          // Track worst trade
+          if (!this.stats.worstTrade || pnl < this.stats.worstTrade) {
+            this.stats.worstTrade = pnl;
+          }
         }
 
         this.onPositionClosed({ position, reason, pnl, pnlPct, result });
@@ -757,6 +797,49 @@ export class LiveTradingEngine {
         entryPrice: p.entryPrice,
         holdTime: ((Date.now() - p.entryTime) / 1000 / 60).toFixed(1) + ' min'
       }))
+    };
+  }
+
+  /**
+   * Get configuration
+   */
+  getConfig() {
+    return {
+      buyAmount: this.buyAmount,
+      stopLoss: this.stopLoss,
+      takeProfit: this.takeProfit,
+      trailingStop: this.trailingStop,
+      scanInterval: this.scanInterval,
+      minLiquidity: this.filters.minLiquidity,
+      maxMarketCap: this.filters.maxMarketCap,
+      minHolders: this.filters.minHolders,
+      maxTokenAge: this.filters.maxTokenAge
+    };
+  }
+
+  /**
+   * Get trading statistics
+   */
+  getStats() {
+    const tradesExecuted = this.stats.tradesExecuted || 0;
+    const winningTrades = this.stats.successfulTrades || 0;
+    const losingTrades = this.stats.failedTrades || 0;
+    const totalPnL = (this.stats.totalProfit || 0) - (this.stats.totalLoss || 0);
+
+    // Calculate ROI based on total capital deployed
+    const totalCapitalDeployed = tradesExecuted * this.buyAmount;
+    const roi = totalCapitalDeployed > 0 ? (totalPnL / totalCapitalDeployed) * 100 : 0;
+
+    return {
+      tokensScanned: this.stats.tokensScanned || 0,
+      tradesExecuted,
+      winningTrades,
+      losingTrades,
+      totalPnL,
+      roi,
+      bestTrade: this.stats.bestTrade || 0,
+      worstTrade: this.stats.worstTrade || 0,
+      runningTime: this.startTime ? Date.now() - this.startTime : 0
     };
   }
 
