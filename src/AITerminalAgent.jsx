@@ -74,6 +74,7 @@ import * as Web3Wallet from "./utils/web3Wallet";
 import AutonomousTrader from "./ai/AutonomousTrader";
 import LiveTradingEngine from "./ai/LiveTradingEngine";
 import TelegramScannerService from "./services/TelegramScannerService";
+import scoutEngine from "./scout/ScoutEngine";
 
 // Import ML modules
 import {
@@ -1301,6 +1302,17 @@ Category requested: ${toolArgs.category || 'none'}`,
   telegram status              - Show scanner status and statistics
   telegram alerts [limit]      - View recent token alerts
   telegram recent [limit]      - View recent analyzed tokens
+
+🔍 SCOUT (100x Token Discovery Framework)
+  scout discover               - Find token candidates from multiple sources
+  scout screen                 - Screen candidates for red flags
+  scout evaluate <symbol>      - Deep 50-point evaluation
+  scout report <symbol>        - Run DD checklist
+  scout rank                   - Show ranked tokens
+  scout watchlist              - View/manage watchlist
+  scout config [key=value]     - View/update configuration
+  scout export                 - Export research data
+  scout reset                  - Clear scout data
 
 🌐 WEB3 WALLET (Secure - Recommended)
   web3 connect [phantom|solflare] - Connect Web3 wallet (secure)
@@ -5853,6 +5865,396 @@ The LangGraph agent provides:
             break;
           }
 
+          case "scout": {
+            const subCommand = args[0]?.toLowerCase();
+
+            if (!subCommand) {
+              const config = scoutEngine.getConfig();
+              const stats = scoutEngine.getStats();
+
+              addOutput({
+                type: "info",
+                content: `🔍 SCOUT - 100x Token Discovery Framework\n\nSystematic 4-phase research process:\n1. Discovery - Find candidates from multiple sources\n2. Screening - Filter red flags & score upside\n3. Evaluation - 50-point deep analysis\n4. Due Diligence - 10-point checklist\n\nCommands:\n• scout discover - Find token candidates\n• scout screen - Screen for red flags\n• scout evaluate <symbol> - Deep evaluation\n• scout report <symbol> - Run DD checklist\n• scout rank - Show ranked tokens\n• scout watchlist [add/remove <symbol>] - Manage watchlist\n• scout config [key=value] - View/update config\n• scout export - Export research data\n• scout reset - Clear all data\n\nCurrent Config:\n• Market Cap: ${config.marketCap}\n• Sector: ${config.sector}\n• Risk: ${config.risk}\n• Timeline: ${config.timeline}\n\nStatistics:\n• Discovered: ${stats.totalDiscovered}\n• Screened: ${stats.totalScreened}\n• Evaluated: ${stats.totalEvaluated}\n• DD Passed: ${stats.totalDDPassed}`
+              });
+              break;
+            }
+
+            try {
+              switch (subCommand) {
+                case "discover": {
+                  addOutput({
+                    type: "info",
+                    content: "🔍 Starting discovery phase...\n\nSearching CoinGecko, DexScreener, CoinMarketCap...\nThis may take 30-60 seconds."
+                  });
+
+                  const result = await scoutEngine.discover();
+
+                  if (result.success) {
+                    let content = `✅ DISCOVERY COMPLETE\n\n`;
+                    content += `Found ${result.count} candidates from ${result.sources.length} sources\n`;
+                    content += `Duration: ${result.duration}\n\n`;
+
+                    if (result.candidates.length > 0) {
+                      content += `TOP CANDIDATES:\n`;
+                      result.candidates.slice(0, 10).forEach((c, i) => {
+                        const mcap = c.marketCap ? `$${(c.marketCap / 1000).toFixed(0)}K` : 'N/A';
+                        content += `${i + 1}. ${c.symbol || c.address?.substring(0, 8)} - ${mcap} - ${c.sector || 'Unknown'}\n`;
+                      });
+
+                      content += `\n💡 Next: Run "scout screen" to filter candidates`;
+                    }
+
+                    addOutput({ type: "success", content });
+                    showToast(`Found ${result.count} candidates`, "success");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Discovery failed\n\n${result.error}`
+                    });
+                  }
+                  break;
+                }
+
+                case "screen": {
+                  const stats = scoutEngine.getStats();
+
+                  if (stats.candidatesInMemory === 0) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ No candidates to screen\n\nRun 'scout discover' first to find candidates."
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `🔬 Screening ${stats.candidatesInMemory} candidates...\n\nChecking for red flags, scoring upside potential...`
+                  });
+
+                  const result = await scoutEngine.screen();
+
+                  if (result.success) {
+                    let content = `✅ SCREENING COMPLETE\n\n`;
+                    content += `Passed: ${result.count}/${result.total} (${result.passRate})\n`;
+                    content += `Threshold: ${result.threshold}/10\n`;
+                    content += `Duration: ${result.duration}\n\n`;
+
+                    if (result.screened.length > 0) {
+                      content += `PASSED SCREENING:\n`;
+                      result.screened.slice(0, 10).forEach((c, i) => {
+                        const flags = c.screening.redFlags.length;
+                        content += `${i + 1}. ${c.symbol || c.address?.substring(0, 8)} - Score: ${c.screening.score.toFixed(1)}/10`;
+                        if (flags > 0) content += ` ⚠️ ${flags} flags`;
+                        content += `\n`;
+                      });
+
+                      content += `\n💡 Next: Run "scout evaluate <SYMBOL>" for deep analysis`;
+                    } else {
+                      content += `No candidates passed screening.\n\nTry:\n• Lower threshold: scout config screeningThreshold=5\n• Different market cap: scout config marketCap=emerging\n• Run discovery again: scout discover`;
+                    }
+
+                    addOutput({ type: "success", content });
+                    showToast(`${result.count} passed screening`, "success");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Screening failed\n\n${result.error}`
+                    });
+                  }
+                  break;
+                }
+
+                case "evaluate": {
+                  const symbol = args[1];
+
+                  if (!symbol) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ Symbol required\n\nUsage: scout evaluate <SYMBOL>\n\nExample: scout evaluate PEPE"
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `📊 Evaluating ${symbol.toUpperCase()}...\n\nRunning 50-point analysis across 5 dimensions...`
+                  });
+
+                  const result = await scoutEngine.evaluate(symbol);
+
+                  if (result.success) {
+                    let content = `✅ EVALUATION: ${result.symbol || symbol.toUpperCase()}\n`;
+                    content += `${'━'.repeat(40)}\n\n`;
+                    content += `Total Score: ${result.totalScore}/${result.maxScore} (${result.percentage})\n`;
+                    content += `Recommendation: ${result.recommendation}\n`;
+                    content += `Confidence: ${result.confidence}\n\n`;
+
+                    content += `CATEGORY SCORES:\n`;
+                    for (const [category, data] of Object.entries(result.evaluation.categories)) {
+                      content += `\n${category.toUpperCase()} (${data.score.toFixed(1)}/${data.maxScore}):\n`;
+                      data.evidence.slice(0, 3).forEach(e => {
+                        const icon = e.type === 'positive' ? '✅' : e.type === 'negative' ? '❌' : '•';
+                        content += `  ${icon} ${e.text}\n`;
+                      });
+                    }
+
+                    content += `\n💡 Next: Run "scout report ${symbol}" for DD checklist`;
+
+                    addOutput({ type: "success", content });
+                    showToast(`${result.symbol}: ${result.recommendation}`, "success");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Evaluation failed\n\n${result.error}`
+                    });
+                  }
+                  break;
+                }
+
+                case "report": {
+                  const symbol = args[1];
+
+                  if (!symbol) {
+                    addOutput({
+                      type: "error",
+                      content: "❌ Symbol required\n\nUsage: scout report <SYMBOL>\n\nExample: scout report PEPE"
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `📋 Running DD checklist on ${symbol.toUpperCase()}...`
+                  });
+
+                  const result = await scoutEngine.runDD(symbol);
+
+                  if (result.success) {
+                    let content = `📋 DUE DILIGENCE: ${result.symbol || symbol.toUpperCase()}\n`;
+                    content += `${'━'.repeat(40)}\n\n`;
+                    content += `Pass Rate: ${result.passRatePercent} (threshold: ${result.threshold})\n`;
+                    content += `Status: ${result.passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
+
+                    content += `CHECKLIST:\n`;
+                    result.checklist.forEach(item => {
+                      const icon = item.passed ? '✅' : '❌';
+                      content += `${icon} ${item.name} (${item.score}/${item.maxScore})\n`;
+                      if (item.notes && item.notes.length > 0) {
+                        item.notes.forEach(note => content += `   💡 ${note}\n`);
+                      }
+                    });
+
+                    content += `\n${'━'.repeat(40)}\n`;
+                    content += `📊 FINAL RECOMMENDATION\n\n`;
+                    content += `Action: ${result.recommendation}\n`;
+                    content += `Guidance: ${result.action}\n`;
+                    content += `Allocation: ${result.allocation}\n`;
+                    content += `Confidence: ${result.confidence}\n`;
+
+                    addOutput({ type: result.passed ? "success" : "info", content });
+                    showToast(`DD ${result.passed ? 'passed' : 'failed'}: ${result.recommendation}`, result.passed ? "success" : "info");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `❌ DD failed\n\n${result.error}`
+                    });
+                  }
+                  break;
+                }
+
+                case "rank": {
+                  const limit = parseInt(args[1]) || 10;
+                  const rankings = scoutEngine.getRankings(limit);
+
+                  if (rankings.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "📊 No tokens evaluated yet\n\nRun the scout workflow:\n1. scout discover\n2. scout screen\n3. scout evaluate <SYMBOL>"
+                    });
+                    break;
+                  }
+
+                  let content = `🏆 TOP RANKED TOKENS\n${'━'.repeat(40)}\n\n`;
+
+                  rankings.forEach(r => {
+                    const ddStatus = r.ddPassed === true ? '✅DD' : r.ddPassed === false ? '❌DD' : '';
+                    content += `#${r.rank} ${r.symbol} - ${r.score}/${r.maxScore} (${r.percentage}) - ${r.recommendation} ${ddStatus}\n`;
+                  });
+
+                  addOutput({ type: "info", content });
+                  break;
+                }
+
+                case "watchlist": {
+                  const action = args[1]?.toLowerCase();
+
+                  if (!action) {
+                    const watchlist = scoutEngine.getWatchlist();
+
+                    if (watchlist.length === 0) {
+                      addOutput({
+                        type: "info",
+                        content: "📋 Watchlist is empty\n\nAdd tokens with: scout watchlist add <SYMBOL>"
+                      });
+                      break;
+                    }
+
+                    let content = `📋 WATCHLIST (${watchlist.length})\n${'━'.repeat(40)}\n\n`;
+                    watchlist.forEach((w, i) => {
+                      content += `${i + 1}. ${w.symbol}`;
+                      if (w.score) content += ` - Score: ${w.score}/50`;
+                      if (w.ddPassed !== null) content += w.ddPassed ? ' ✅DD' : ' ❌DD';
+                      if (w.notes) content += `\n   Notes: ${w.notes}`;
+                      content += `\n   Added: ${new Date(w.addedAt).toLocaleDateString()}\n\n`;
+                    });
+
+                    addOutput({ type: "info", content });
+                    break;
+                  }
+
+                  if (action === 'add') {
+                    const symbol = args[2];
+                    if (!symbol) {
+                      addOutput({
+                        type: "error",
+                        content: "❌ Symbol required\n\nUsage: scout watchlist add <SYMBOL>"
+                      });
+                      break;
+                    }
+
+                    const notes = args.slice(3).join(' ');
+                    const result = scoutEngine.addToWatchlist(symbol, notes);
+
+                    addOutput({
+                      type: result.success ? "success" : "error",
+                      content: result.message
+                    });
+                    break;
+                  }
+
+                  if (action === 'remove') {
+                    const symbol = args[2];
+                    if (!symbol) {
+                      addOutput({
+                        type: "error",
+                        content: "❌ Symbol required\n\nUsage: scout watchlist remove <SYMBOL>"
+                      });
+                      break;
+                    }
+
+                    const result = scoutEngine.removeFromWatchlist(symbol);
+
+                    addOutput({
+                      type: result.success ? "success" : "error",
+                      content: result.message
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "error",
+                    content: `Unknown watchlist action: ${action}\n\nUse:\n• scout watchlist - View list\n• scout watchlist add <SYMBOL> - Add\n• scout watchlist remove <SYMBOL> - Remove`
+                  });
+                  break;
+                }
+
+                case "config": {
+                  const setting = args[1];
+
+                  if (!setting) {
+                    const config = scoutEngine.getConfig();
+                    let content = `⚙️ SCOUT CONFIGURATION\n${'━'.repeat(40)}\n\n`;
+
+                    for (const [key, value] of Object.entries(config)) {
+                      content += `${key}: ${JSON.stringify(value)}\n`;
+                    }
+
+                    content += `\nUpdate with: scout config key=value\n`;
+                    content += `Example: scout config marketCap=ultra`;
+
+                    addOutput({ type: "info", content });
+                    break;
+                  }
+
+                  // Parse key=value
+                  const [key, ...valueParts] = setting.split('=');
+                  const value = valueParts.join('=');
+
+                  if (!value) {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Invalid format\n\nUse: scout config key=value\n\nExample: scout config marketCap=ultra`
+                    });
+                    break;
+                  }
+
+                  // Parse value type
+                  let parsedValue = value;
+                  if (value === 'true') parsedValue = true;
+                  else if (value === 'false') parsedValue = false;
+                  else if (!isNaN(parseFloat(value))) parsedValue = parseFloat(value);
+
+                  const result = scoutEngine.setConfig({ [key]: parsedValue });
+
+                  if (result.success && Object.keys(result.applied).length > 0) {
+                    addOutput({
+                      type: "success",
+                      content: `✅ Config updated\n\n${key} = ${JSON.stringify(parsedValue)}`
+                    });
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Unknown config key: ${key}\n\nValid keys: marketCap, sector, risk, timeline, screeningThreshold, etc.`
+                    });
+                  }
+                  break;
+                }
+
+                case "export": {
+                  const data = scoutEngine.exportData();
+
+                  // Create downloadable JSON
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `scout-export-${new Date().toISOString().split('T')[0]}.json`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+
+                  addOutput({
+                    type: "success",
+                    content: `✅ Data exported!\n\nDownloaded: scout-export-${new Date().toISOString().split('T')[0]}.json\n\nContains:\n• ${data.candidates?.length || 0} candidates\n• ${data.screened?.length || 0} screened\n• ${data.evaluated?.length || 0} evaluated\n• ${data.ddReports?.length || 0} DD reports\n• ${data.watchlist?.length || 0} watchlist items`
+                  });
+                  break;
+                }
+
+                case "reset": {
+                  const result = scoutEngine.reset();
+
+                  addOutput({
+                    type: "success",
+                    content: "✅ Scout data reset\n\nAll candidates, evaluations, and DD reports cleared."
+                  });
+
+                  showToast("Scout reset", "success");
+                  break;
+                }
+
+                default:
+                  addOutput({
+                    type: "error",
+                    content: `Unknown scout command: ${subCommand}\n\nUse 'scout' to see available commands`
+                  });
+              }
+            } catch (error) {
+              handleCommandError(error, `scout ${subCommand}`, addOutput);
+            }
+            break;
+          }
+
           case "clear":
             setOutput([]);
             addOutput({
@@ -5935,7 +6337,7 @@ The LangGraph agent provides:
     // Setup Telegram scanner event listeners
     const scanner = telegramScanner.current;
 
-    const handleTokenAlert = (alert) => {
+    const handleTokenAlert = async (alert) => {
       // Store alert in state
       setTelegramAlerts(prev => [alert, ...prev].slice(0, 50));
 
@@ -5974,6 +6376,40 @@ The LangGraph agent provides:
       // Show toast for high-confidence buy signals
       if (decision.decision === 'BUY' && decision.confidence >= 0.7) {
         showToast(`🚀 High confidence buy signal: ${token.address.substring(0, 8)}...`, "success");
+      }
+
+      // Process through Scout framework if auto-scout is enabled
+      try {
+        const scoutConfig = scoutEngine.getConfig();
+        if (scoutConfig.autoScoutTelegramAlerts) {
+          const scoutResult = await scoutEngine.processTelegramAlert(alert);
+
+          if (scoutResult.success && scoutResult.evaluation) {
+            let scoutContent = `\n🔬 SCOUT ANALYSIS:\n`;
+            scoutContent += `📊 Score: ${scoutResult.evaluation.totalScore}/50 (${scoutResult.evaluation.percentage})\n`;
+            scoutContent += `🎯 Recommendation: ${scoutResult.evaluation.recommendation}\n`;
+            scoutContent += `💡 Confidence: ${scoutResult.evaluation.confidence}\n`;
+
+            if (scoutResult.screening) {
+              scoutContent += `\n🛡️ Screening: ${scoutResult.screening.score}/10\n`;
+              if (scoutResult.screening.redFlags && scoutResult.screening.redFlags.length > 0) {
+                scoutContent += `⚠️ Red Flags: ${scoutResult.screening.redFlags.map(f => f.name).join(', ')}\n`;
+              }
+            }
+
+            addOutput({
+              type: scoutResult.evaluation.recommendation === 'BUY' ? 'success' : 'info',
+              content: scoutContent
+            });
+          } else if (scoutResult.success && !scoutResult.passed) {
+            addOutput({
+              type: 'warning',
+              content: `\n🔬 SCOUT: Token did not pass screening - ${scoutResult.reason}`
+            });
+          }
+        }
+      } catch (scoutError) {
+        console.error('[Scout] Error processing Telegram alert:', scoutError);
       }
     };
 

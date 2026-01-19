@@ -205,6 +205,28 @@ Once the terminal is running, use the `apikeys` command to configure:
 
 **Setup Guide**: See [TELEGRAM_GUIDE.md](TELEGRAM_GUIDE.md) for complete setup instructions.
 
+### 🔬 Scout Module (100x Token Discovery)
+
+A systematic 4-phase framework for discovering high-potential tokens:
+
+- `scout discover` - Find candidates from CoinGecko, DexScreener, CoinMarketCap
+- `scout screen` - Filter candidates with red flag detection
+- `scout evaluate [symbol]` - Deep 50-point scoring analysis
+- `scout report [symbol]` - Run 10-point DD checklist
+- `scout rank` - View ranked list of evaluated tokens
+- `scout watchlist [add|remove symbol]` - Manage watchlist
+- `scout config [key=value]` - Configure parameters
+- `scout export` - Export research data as JSON
+- `scout reset` - Clear all Scout state
+
+**Configuration Options:**
+
+- `marketCap` - ultra (<$300K), emerging (<$1M), early (<$10M), mid (<$100M)
+- `sector` - DeFi, AI, Gaming, Meme, Infra, RWA, Any
+- `risk` - High, Medium, Low
+- `timeline` - Days, Weeks, Months, Years
+- `autoScoutTelegramAlerts` - Auto-analyze Telegram token alerts (true/false)
+
 ### 📊 Crypto Data & Analysis
 
 - `price [symbol]` - Get current price
@@ -247,6 +269,12 @@ ai-terminal-agent/
 │   ├── api/                     # API integrations
 │   │   ├── FenrirTradingAPI.js  # Trading bot API
 │   │   └── index.js             # API exports
+│   ├── scout/                   # 100x Token Discovery Framework
+│   │   ├── ScoutEngine.js       # Main orchestrator
+│   │   ├── DiscoveryService.js  # Multi-source discovery
+│   │   ├── ScreeningService.js  # Red flag detection
+│   │   ├── EvaluationService.js # 50-point scoring
+│   │   └── DDService.js         # Due diligence checklist
 │   ├── ml/                      # Machine learning modules
 │   ├── components/              # React components
 │   ├── config/                  # Configuration files
@@ -421,8 +449,10 @@ Contributions welcome! Please:
 - [ ] Portfolio rebalancing features
 - [ ] Social sentiment integration (Twitter, Discord)
 - [ ] Mobile app version
-- [ ] Telegram bot integration
+- [x] Telegram bot integration
+- [x] Scout Module (100x Token Discovery Framework)
 - [ ] Advanced chart analysis tools
+- [ ] Multi-AI ensemble analysis
 
 ## License
 
