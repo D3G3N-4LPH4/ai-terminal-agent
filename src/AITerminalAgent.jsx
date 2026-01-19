@@ -73,6 +73,7 @@ import * as WalletUtils from "./utils/solanaWallet";
 import * as Web3Wallet from "./utils/web3Wallet";
 import AutonomousTrader from "./ai/AutonomousTrader";
 import LiveTradingEngine from "./ai/LiveTradingEngine";
+import TelegramScannerService from "./services/TelegramScannerService";
 
 // Import ML modules
 import {
@@ -473,6 +474,8 @@ export default function AITerminalAgent() {
   const fenrirTradingAPI = useRef(null);
   const autonomousTrader = useRef(null);
   const liveTradingEngine = useRef(null);
+  const telegramScanner = useRef(TelegramScannerService);
+  const [telegramAlerts, setTelegramAlerts] = useState([]);
 
   // ML Service refs
   const mlService = useRef(null);
@@ -1291,6 +1294,13 @@ Category requested: ${toolArgs.category || 'none'}`,
   fenrir positions             - View all open positions
   fenrir config                - Show current bot configuration
   fenrir health                - Check if Python backend is running
+
+📱 TELEGRAM SCANNER (AI-Powered Token Detection)
+  telegram start               - Start Telegram token scanner
+  telegram stop                - Stop the scanner
+  telegram status              - Show scanner status and statistics
+  telegram alerts [limit]      - View recent token alerts
+  telegram recent [limit]      - View recent analyzed tokens
 
 🌐 WEB3 WALLET (Secure - Recommended)
   web3 connect [phantom|solflare] - Connect Web3 wallet (secure)
@@ -5665,6 +5675,184 @@ The LangGraph agent provides:
             break;
           }
 
+          case "telegram": {
+            const subCommand = args[0]?.toLowerCase();
+
+            if (!subCommand) {
+              addOutput({
+                type: "info",
+                content: `📱 TELEGRAM SCANNER\n\nAutomatically monitors Telegram channels for new token launches.\n\nCommands:\n• telegram start - Start monitoring Telegram channels\n• telegram stop - Stop the scanner\n• telegram status - Show scanner status and statistics\n• telegram alerts [limit] - View recent token alerts (default: 10)\n• telegram recent [limit] - View analyzed tokens from database\n\n🔍 Features:\n• AI-powered token analysis using Claude\n• Real-time alerts sent to terminal\n• Security checks (honeypot, taxes, liquidity)\n• Multi-chain support (Solana, Ethereum, BSC)\n\n⚙️ Setup Required:\n1. Configure .env in telegram-scanner/ folder\n2. Add your Telegram API credentials\n3. Add your Anthropic API key\n4. List Telegram channels to monitor\n\nSee TELEGRAM_GUIDE.md for setup instructions.`
+              });
+              break;
+            }
+
+            try {
+              switch (subCommand) {
+                case "start": {
+                  addOutput({
+                    type: "info",
+                    content: "📱 Starting Telegram scanner...\n\nThis will:\n• Launch Python bot process\n• Connect to Telegram\n• Start monitoring channels\n• Send alerts to terminal\n\nPlease wait..."
+                  });
+
+                  const result = await telegramScanner.current.start();
+
+                  if (result.success) {
+                    addOutput({
+                      type: "success",
+                      content: `✅ Telegram Scanner Started!\n\n🔌 WebSocket: ws://localhost:${result.wsPort}\n🌐 HTTP API: http://localhost:${result.httpPort}\n\n📡 Listening for token drops from Telegram...\n\nUse 'telegram status' to check statistics.`
+                    });
+                    showToast("Telegram scanner started", "success");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `❌ Failed to start scanner\n\n${result.message}\n\n💡 Make sure:\n• Python is installed\n• Dependencies installed (pip install -r requirements.txt)\n• .env file configured in telegram-scanner/\n• Telegram API credentials are valid`
+                    });
+                  }
+                  break;
+                }
+
+                case "stop": {
+                  addOutput({
+                    type: "info",
+                    content: "⏹️ Stopping Telegram scanner..."
+                  });
+
+                  const result = await telegramScanner.current.stop();
+
+                  if (result.success) {
+                    addOutput({
+                      type: "success",
+                      content: "✅ Telegram scanner stopped"
+                    });
+                    showToast("Scanner stopped", "success");
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `❌ ${result.message}`
+                    });
+                  }
+                  break;
+                }
+
+                case "status": {
+                  const status = await telegramScanner.current.getStatus();
+
+                  let content = "📱 TELEGRAM SCANNER STATUS\n\n";
+
+                  if (!status.running) {
+                    content += "❌ Status: Not Running\n\n";
+                    content += "Use 'telegram start' to begin monitoring.";
+                  } else {
+                    content += `✅ Status: Running\n`;
+                    content += `🔌 WebSocket: ${status.connected ? '✅ Connected' : '❌ Disconnected'}\n\n`;
+
+                    content += `📊 STATISTICS:\n`;
+                    content += `• Tokens Received: ${status.stats.tokensReceived}\n`;
+                    content += `• Buy Signals: ${status.stats.buySignals}\n`;
+                    content += `• Last Alert: ${status.stats.lastAlert ? new Date(status.stats.lastAlert).toLocaleString() : 'Never'}\n`;
+
+                    if (status.stats.startTime) {
+                      const uptime = Math.floor((Date.now() - new Date(status.stats.startTime).getTime()) / 60000);
+                      content += `• Uptime: ${uptime} minutes\n`;
+                    }
+
+                    if (status.botStatus) {
+                      content += `\n🤖 BOT STATUS:\n`;
+                      content += `• Simulation Mode: ${status.botStatus.simulation_mode ? 'Yes' : 'No'}\n`;
+                      content += `• Monitored Chats: ${status.botStatus.monitored_chats?.length || 0}\n`;
+                      content += `• Connected Terminals: ${status.botStatus.connected_clients || 0}\n`;
+                    }
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content
+                  });
+                  break;
+                }
+
+                case "alerts": {
+                  const limit = parseInt(args[1]) || 10;
+                  const alerts = telegramScanner.current.getRecentAlerts(limit);
+
+                  if (alerts.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "📭 No recent alerts\n\nAlerts will appear here when tokens are detected."
+                    });
+                    break;
+                  }
+
+                  let content = `📨 RECENT TOKEN ALERTS (${alerts.length})\n\n`;
+
+                  alerts.forEach((alert, index) => {
+                    const token = alert.token;
+                    const metrics = alert.metrics;
+                    const decision = alert.ai_decision;
+
+                    content += `${index + 1}. ${token.address.substring(0, 8)}... (${token.chain})\n`;
+                    content += `   📍 Source: ${token.chat_name || 'Unknown'}\n`;
+                    content += `   💰 Price: $${metrics.price_usd?.toFixed(8) || 'N/A'}\n`;
+                    content += `   💧 Liquidity: $${metrics.liquidity_usd?.toLocaleString() || 'N/A'}\n`;
+                    content += `   🎯 AI Decision: ${decision.decision} (${(decision.confidence * 100).toFixed(0)}%)\n`;
+                    content += `   ⚠️ Risk: ${decision.risk_score}/100\n`;
+                    content += `   ⏰ ${new Date(alert.timestamp).toLocaleTimeString()}\n\n`;
+                  });
+
+                  addOutput({
+                    type: "info",
+                    content
+                  });
+                  break;
+                }
+
+                case "recent": {
+                  const limit = parseInt(args[1]) || 10;
+
+                  addOutput({
+                    type: "info",
+                    content: "📊 Fetching recent analyses..."
+                  });
+
+                  const tokens = await telegramScanner.current.getRecentAnalyses(limit);
+
+                  if (tokens.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "📭 No tokens analyzed yet\n\nTokens will be saved to the database after analysis."
+                    });
+                    break;
+                  }
+
+                  let content = `📊 RECENT ANALYZED TOKENS (${tokens.length})\n\n`;
+
+                  tokens.forEach((token, index) => {
+                    content += `${index + 1}. ${token.address.substring(0, 8)}... (${token.chain})\n`;
+                    content += `   📍 Source: ${token.chat_name || 'Unknown'}\n`;
+                    content += `   🎯 Decision: ${token.decision} (${(token.confidence * 100).toFixed(0)}%)\n`;
+                    content += `   ⚠️ Risk: ${token.risk_score}/100\n`;
+                    content += `   ⏰ ${new Date(token.analyzed_at).toLocaleString()}\n\n`;
+                  });
+
+                  addOutput({
+                    type: "info",
+                    content
+                  });
+                  break;
+                }
+
+                default:
+                  addOutput({
+                    type: "error",
+                    content: `Unknown telegram command: ${subCommand}\n\nUse 'telegram' to see available commands`
+                  });
+              }
+            } catch (error) {
+              handleCommandError(error, `telegram ${subCommand}`, addOutput);
+            }
+            break;
+          }
+
           case "clear":
             setOutput([]);
             addOutput({
@@ -5740,6 +5928,82 @@ The LangGraph agent provides:
     },
     [addOutput, showToast, currentTheme, theme, currentAIModel, useLangGraphAgent, showAgentReasoning, fenrirAgent]
   );
+
+  // ==================== TELEGRAM SCANNER EVENT LISTENERS ====================
+
+  useEffect(() => {
+    // Setup Telegram scanner event listeners
+    const scanner = telegramScanner.current;
+
+    const handleTokenAlert = (alert) => {
+      // Store alert in state
+      setTelegramAlerts(prev => [alert, ...prev].slice(0, 50));
+
+      // Show notification in terminal
+      const token = alert.token;
+      const metrics = alert.metrics;
+      const decision = alert.ai_decision;
+
+      let content = `📱 TELEGRAM TOKEN DETECTED!\n\n`;
+      content += `🔗 Address: ${token.address}\n`;
+      content += `⛓️ Chain: ${token.chain.toUpperCase()}\n`;
+      content += `📍 Source: ${token.chat_name || 'Unknown channel'}\n\n`;
+
+      content += `📊 METRICS:\n`;
+      content += `💰 Price: $${metrics.price_usd?.toFixed(8) || 'N/A'}\n`;
+      content += `💧 Liquidity: $${metrics.liquidity_usd?.toLocaleString() || 'N/A'}\n`;
+      content += `📈 Market Cap: $${metrics.market_cap_usd?.toLocaleString() || 'N/A'}\n`;
+      content += `👥 Holders: ${metrics.holder_count || 'N/A'}\n\n`;
+
+      content += `🤖 AI ANALYSIS:\n`;
+      content += `🎯 Decision: ${decision.decision}\n`;
+      content += `📊 Confidence: ${(decision.confidence * 100).toFixed(0)}%\n`;
+      content += `⚠️ Risk Score: ${decision.risk_score}/100\n`;
+      content += `💭 Reasoning: ${decision.reasoning.substring(0, 150)}...\n\n`;
+
+      if (decision.warnings && decision.warnings.length > 0) {
+        content += `⚠️ WARNINGS:\n`;
+        decision.warnings.forEach(w => content += `• ${w}\n`);
+      }
+
+      addOutput({
+        type: decision.decision === 'BUY' ? 'success' : 'info',
+        content
+      });
+
+      // Show toast for high-confidence buy signals
+      if (decision.decision === 'BUY' && decision.confidence >= 0.7) {
+        showToast(`🚀 High confidence buy signal: ${token.address.substring(0, 8)}...`, "success");
+      }
+    };
+
+    const handleScannerError = (error) => {
+      console.error('[Telegram Scanner]', error);
+      addOutput({
+        type: 'error',
+        content: `📱 Telegram Scanner Error:\n${error.message}`
+      });
+    };
+
+    const handleScannerStopped = (info) => {
+      addOutput({
+        type: 'info',
+        content: `📱 Telegram scanner stopped\n\nExit code: ${info.code}`
+      });
+    };
+
+    // Register event listeners
+    scanner.on('token_alert', handleTokenAlert);
+    scanner.on('error', handleScannerError);
+    scanner.on('stopped', handleScannerStopped);
+
+    // Cleanup
+    return () => {
+      scanner.off('token_alert', handleTokenAlert);
+      scanner.off('error', handleScannerError);
+      scanner.off('stopped', handleScannerStopped);
+    };
+  }, [addOutput, showToast]);
 
   // ==================== KEYBOARD SHORTCUTS ====================
 

@@ -7,6 +7,7 @@ A powerful terminal-based interface for cryptocurrency analysis and **autonomous
 ### Autonomous Trading Features
 
 - **Live Trading Engine** - Real-time scanning of pump.fun and bonk.fun
+- **Telegram Token Scanner** - AI-powered monitoring of Telegram channels for new launches
 - **Self-Improving AI Trader** - Q-Learning reinforcement learning that improves over time
 - **Web3 Wallet Integration** - Secure Phantom/Solflare wallet support (no private key storage!)
 - **Risk Management** - Automated stop loss, take profit, and trailing stops
@@ -25,6 +26,7 @@ A powerful terminal-based interface for cryptocurrency analysis and **autonomous
 ### 🤖 Autonomous Trading
 
 - **Live Trading Scanner** - Monitor pump.fun and bonk.fun for new token launches
+- **Telegram Token Scanner** - AI-powered Telegram channel monitoring with Claude analysis
 - **AI Trader (Q-Learning)** - Self-improving autonomous trader with reinforcement learning
 - **Web3 Wallet Integration** - Secure wallet connection (Phantom, Solflare)
 - **Risk Management** - Stop loss, take profit, trailing stops
@@ -192,6 +194,16 @@ Once the terminal is running, use the `apikeys` command to configure:
 - `fenrir positions` - View all open positions
 - `fenrir config` - Show current bot configuration
 - `fenrir health` - Check if Python backend is running
+
+### 📱 Telegram Scanner (AI-Powered)
+
+- `telegram start` - Start monitoring Telegram channels
+- `telegram stop` - Stop the scanner
+- `telegram status` - Show scanner status and statistics
+- `telegram alerts [limit]` - View recent token alerts
+- `telegram recent [limit]` - View analyzed tokens from database
+
+**Setup Guide**: See [TELEGRAM_GUIDE.md](TELEGRAM_GUIDE.md) for complete setup instructions.
 
 ### 📊 Crypto Data & Analysis
 
