@@ -1,0 +1,87 @@
+# FENRIR Pump.fun Trading Bot - Complete Dependencies
+# Install with: pip install -r requirements.txt
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                         CORE DEPENDENCIES
+# ═══════════════════════════════════════════════════════════════════════════
+
+# FastAPI Server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+
+# Solana & Blockchain
+solana>=0.30.0
+solders>=0.18.0
+base58>=2.1.1
+
+# HTTP & WebSocket (Phase 1: Price Feeds, Jito)
+aiohttp>=3.9.0
+websockets>=12.0
+
+# Environment & Configuration
+python-dotenv>=1.0.0
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                      PHASE 1: REAL TRADING
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Price Feed APIs
+requests>=2.31.0  # Fallback for sync requests
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                      PHASE 2: SAFETY & PERSISTENCE
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Database (Trade Database)
+# SQLite is built into Python, no additional package needed
+
+# Data Analysis (Performance Analytics, Backtesting)
+pandas>=2.0.0
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                      PHASE 3: AI & INTELLIGENCE
+# ═══════════════════════════════════════════════════════════════════════════
+
+# No additional packages needed - uses aiohttp for OpenRouter API
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                      DEVELOPMENT & TESTING
+# ═══════════════════════════════════════════════════════════════════════════
+
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+flake8>=6.0.0
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                      OPTIONAL ENHANCEMENTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Logging with colors
+colorlog>=6.7.0
+
+# Excel file support (if exporting to .xlsx)
+openpyxl>=3.1.0
+
+# Jupiter SDK (if official package becomes available)
+# jupiter-python-sdk>=0.1.0
+
+# ═══════════════════════════════════════════════════════════════════════════
+#                      NOTES
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Minimum Python Version: 3.9+
+# Recommended Python Version: 3.11+
+#
+# Installation:
+#   pip install -r requirements.txt
+#
+# For development:
+#   pip install -r requirements.txt pytest black flake8
+#
+# For AI features:
+#   Set OPENROUTER_API_KEY in .env
+#
+# For price feeds:
+#   Set BIRDEYE_API_KEY in .env (optional but recommended)

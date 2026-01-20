@@ -5675,6 +5675,245 @@ The LangGraph agent provides:
                   break;
                 }
 
+                case "performance": {
+                  // Phase 3: Get performance report from database
+                  const days = parseInt(args[1]) || 30;
+                  addOutput({
+                    type: "info",
+                    content: `📊 Fetching performance report (${days} days)...`
+                  });
+
+                  const report = await liveTradingEngine.current.getPerformanceReport(days);
+
+                  if (report?.error) {
+                    addOutput({
+                      type: "warning",
+                      content: `⚠️ ${report.error}\n\nTo enable performance analytics:\n1. Start Fenrir backend: cd fenrir-trading-bot && python app.py\n2. Backend must be running on http://localhost:8000`
+                    });
+                    break;
+                  }
+
+                  if (report?.report) {
+                    addOutput({
+                      type: "info",
+                      content: report.report
+                    });
+                  } else {
+                    addOutput({
+                      type: "warning",
+                      content: `No performance data available for the last ${days} days.`
+                    });
+                  }
+                  break;
+                }
+
+                case "history": {
+                  // Get trade history from database
+                  const limit = parseInt(args[1]) || 20;
+                  const history = await liveTradingEngine.current.getPositionHistory(30);
+
+                  if (history?.error) {
+                    addOutput({
+                      type: "warning",
+                      content: `⚠️ ${history.error}\n\nStart Fenrir backend to enable trade history.`
+                    });
+                    break;
+                  }
+
+                  if (!history?.positions || history.positions.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "No trade history available yet."
+                    });
+                    break;
+                  }
+
+                  let output = `📜 TRADE HISTORY (Last ${history.positions.length} positions)\n`;
+                  output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+                  history.positions.slice(0, limit).forEach((p, i) => {
+                    const pnlIcon = p.pnl_sol >= 0 ? '🟢' : '🔴';
+                    output += `${i + 1}. ${p.token_symbol || p.token_mint?.substring(0, 8)}\n`;
+                    output += `   P&L: ${pnlIcon} ${p.pnl_sol?.toFixed(4)} SOL (${p.pnl_pct?.toFixed(1)}%)\n`;
+                    output += `   Hold: ${p.hold_time_minutes} min | Exit: ${p.exit_reason || 'N/A'}\n\n`;
+                  });
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "toptokens": {
+                  // Get best performing tokens
+                  const limit = parseInt(args[1]) || 10;
+                  const tokens = await liveTradingEngine.current.getTopTokens(limit);
+
+                  if (tokens?.error) {
+                    addOutput({
+                      type: "warning",
+                      content: `⚠️ ${tokens.error}\n\nStart Fenrir backend to enable token analytics.`
+                    });
+                    break;
+                  }
+
+                  if (!tokens?.tokens || tokens.tokens.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "No token performance data available yet."
+                    });
+                    break;
+                  }
+
+                  let output = `🏆 TOP PERFORMING TOKENS\n`;
+                  output += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+                  tokens.tokens.forEach((t, i) => {
+                    output += `${i + 1}. ${t.token_symbol || t.token_mint?.substring(0, 8)}\n`;
+                    output += `   Avg Return: ${t.avg_return?.toFixed(1)}%\n`;
+                    output += `   Total P&L: ${t.total_pnl?.toFixed(4)} SOL\n`;
+                    output += `   Trades: ${t.trades}\n\n`;
+                  });
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "ai": {
+                  // Enable/disable AI analysis
+                  const action = args[1]?.toLowerCase();
+
+                  if (!action || action === 'status') {
+                    const jitoStatus = await liveTradingEngine.current.getJitoStatus();
+                    addOutput({
+                      type: "info",
+                      content: `🤖 AI & BACKEND STATUS\n\n` +
+                        `AI Analysis: ${liveTradingEngine.current.useAIAnalysis ? '✅ Enabled' : '❌ Disabled'}\n` +
+                        `Database: ${liveTradingEngine.current.useDatabase ? '✅ Enabled' : '❌ Disabled'}\n` +
+                        `Backend Connected: ${liveTradingEngine.current.backendConnected ? '✅ Yes' : '❌ No'}\n` +
+                        `Jito MEV: ${jitoStatus?.enabled ? '✅ Enabled' : '❌ Disabled'}\n\n` +
+                        `Commands:\n` +
+                        `• scan ai enable - Enable AI-powered analysis\n` +
+                        `• scan ai disable - Disable AI analysis\n` +
+                        `• scan ai analyze <address> - Analyze specific token`
+                    });
+                    break;
+                  }
+
+                  if (action === 'enable') {
+                    liveTradingEngine.current.useAIAnalysis = true;
+                    addOutput({
+                      type: "success",
+                      content: `✅ AI Analysis Enabled\n\nTokens will now be analyzed using Claude AI before trading.\n\n⚠️ Requires:\n• Fenrir backend running\n• OPENROUTER_API_KEY configured\n• AI_ANALYSIS_ENABLED=true in .env`
+                    });
+                    break;
+                  }
+
+                  if (action === 'disable') {
+                    liveTradingEngine.current.useAIAnalysis = false;
+                    addOutput({
+                      type: "success",
+                      content: `❌ AI Analysis Disabled\n\nTokens will be evaluated using risk score only.`
+                    });
+                    break;
+                  }
+
+                  if (action === 'analyze' && args[2]) {
+                    const tokenAddress = args[2];
+                    addOutput({
+                      type: "info",
+                      content: `🤖 Analyzing token ${tokenAddress.substring(0, 8)}...`
+                    });
+
+                    const analysis = await liveTradingEngine.current.getAIAnalysis({
+                      address: tokenAddress,
+                      name: 'Unknown',
+                      symbol: '???'
+                    });
+
+                    if (analysis?.error) {
+                      addOutput({
+                        type: "warning",
+                        content: `⚠️ ${analysis.error}\n\nMake sure Fenrir backend is running with AI enabled.`
+                      });
+                      break;
+                    }
+
+                    let output = `🤖 AI ANALYSIS RESULT\n`;
+                    output += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                    output += `🎯 Decision: ${analysis.decision?.toUpperCase()}\n`;
+                    output += `📊 Confidence: ${(analysis.confidence * 100).toFixed(0)}%\n`;
+                    output += `⚠️ Risk Score: ${analysis.risk_score}/10\n\n`;
+                    output += `💭 Reasoning:\n${analysis.reasoning}\n\n`;
+
+                    if (analysis.red_flags?.length > 0) {
+                      output += `🚩 Red Flags:\n`;
+                      analysis.red_flags.forEach(f => output += `• ${f}\n`);
+                      output += `\n`;
+                    }
+
+                    if (analysis.green_flags?.length > 0) {
+                      output += `✅ Green Flags:\n`;
+                      analysis.green_flags.forEach(f => output += `• ${f}\n`);
+                      output += `\n`;
+                    }
+
+                    if (analysis.suggested_buy_amount_sol) {
+                      output += `💡 Suggested:\n`;
+                      output += `• Buy: ${analysis.suggested_buy_amount_sol} SOL\n`;
+                      output += `• Stop Loss: ${analysis.suggested_stop_loss_pct}%\n`;
+                      output += `• Take Profit: ${analysis.suggested_take_profit_pct}%\n`;
+                    }
+
+                    addOutput({
+                      type: analysis.decision === 'buy' || analysis.decision === 'strong_buy' ? 'success' : 'info',
+                      content: output
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "error",
+                    content: `Unknown AI command: ${action}\n\nUse: scan ai [enable|disable|status|analyze <address>]`
+                  });
+                  break;
+                }
+
+                case "backend": {
+                  // Check backend connection
+                  addOutput({
+                    type: "info",
+                    content: "🔌 Checking Fenrir backend connection..."
+                  });
+
+                  const health = await liveTradingEngine.current.checkBackendStatus();
+
+                  if (health.success) {
+                    let output = `✅ FENRIR BACKEND CONNECTED\n\n`;
+                    output += `Services:\n`;
+                    output += `• Price Feed: ${health.services?.price_feed ? '✅' : '❌'}\n`;
+                    output += `• Trade Database: ${health.services?.trade_db ? '✅' : '❌'}\n`;
+                    output += `• AI Analyst: ${health.services?.ai_analyst ? '✅' : '❌'}\n`;
+                    output += `• Jito MEV: ${health.services?.jito ? '✅' : '❌'}\n`;
+                    output += `• Performance Analyzer: ${health.services?.performance_analyzer ? '✅' : '❌'}\n`;
+
+                    addOutput({
+                      type: "success",
+                      content: output
+                    });
+                  } else {
+                    addOutput({
+                      type: "error",
+                      content: `❌ FENRIR BACKEND NOT AVAILABLE\n\nError: ${health.error}\n\nTo start the backend:\n1. cd fenrir-trading-bot\n2. pip install -r requirements.txt\n3. cp .env.example .env\n4. python app.py\n\nBackend provides:\n• Multi-source price feeds\n• Trade database & persistence\n• AI-powered token analysis\n• Performance analytics\n• Jito MEV protection`
+                    });
+                  }
+                  break;
+                }
+
                 default:
                   addOutput({
                     type: "error",

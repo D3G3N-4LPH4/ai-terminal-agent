@@ -167,7 +167,9 @@ Once the terminal is running, use the `apikeys` command to configure:
 - `web3 status` - Show connection status
 - `web3 balance` - Check wallet balance
 
-### 🔍 Live Trading Scanner
+### 🔍 Live Trading Scanner (Phase 1-3)
+
+**Basic Commands:**
 
 - `scan start [simulation|live]` - Start scanner
 - `scan stop` - Stop scanner
@@ -175,6 +177,26 @@ Once the terminal is running, use the `apikeys` command to configure:
 - `scan tokens` - List discovered tokens
 - `scan config [key]=[value]` - Update configuration
 - `scan stats` - Trading statistics
+
+**Phase 2-3 Features (requires Fenrir backend):**
+
+- `scan backend` - Check backend connection status
+- `scan performance [days]` - View performance report (Sharpe, Sortino, drawdown)
+- `scan history [limit]` - View trade history from database
+- `scan toptokens [limit]` - Best performing tokens
+- `scan ai status` - AI & MEV protection status
+- `scan ai enable` - Enable AI-powered token analysis
+- `scan ai disable` - Disable AI analysis
+- `scan ai analyze <address>` - Analyze specific token with AI
+
+**Backend Setup:**
+
+```bash
+cd fenrir-trading-bot
+pip install -r requirements.txt
+cp .env.example .env
+python app.py
+```
 
 ### 🤖 Autonomous AI Trader
 

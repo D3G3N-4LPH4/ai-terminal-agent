@@ -1,5 +1,5 @@
 /**
- * Live Trading Engine
+ * Live Trading Engine v2.0
  *
  * Integrates with pump.fun and bonk.fun to:
  * - Scan for new token launches in real-time
@@ -7,18 +7,30 @@
  * - Execute real trades with Solana wallet
  * - Monitor positions and auto-exit
  * - Connect with Autonomous AI for decision making
+ *
+ * Phase 1-3 Integration:
+ * - Phase 1: Real trading via pump.fun bonding curve
+ * - Phase 2: Persistent trade database & Jito MEV protection
+ * - Phase 3: AI-powered analysis & performance analytics
  */
 
 import { FenrirTradingAPI } from '../api/FenrirTradingAPI.js';
+import fenrirBackend from '../services/FenrirBackendService.js';
 
 export class LiveTradingEngine {
   constructor(config = {}) {
     this.tradingAPI = new FenrirTradingAPI(config.apiUrl);
+    this.backend = fenrirBackend;
 
     // Configuration
     this.walletPublicKey = config.walletPublicKey;
     this.walletPrivateKey = config.walletPrivateKey;
     this.mode = config.mode || 'simulation'; // simulation or live
+
+    // Phase 2-3 features
+    this.useDatabase = config.useDatabase !== false; // Persist trades to database
+    this.useAIAnalysis = config.useAIAnalysis || false; // AI-powered decisions
+    this.useJito = config.useJito || false; // MEV protection
 
     // Scanning configuration
     this.scanInterval = config.scanInterval || 5000; // 5 seconds
@@ -77,13 +89,26 @@ export class LiveTradingEngine {
       throw new Error('Trading engine already running');
     }
 
-    console.log(`🚀 Live Trading Engine Starting...`);
+    console.log(`🚀 Live Trading Engine v2.0 Starting...`);
     console.log(`📊 Mode: ${this.mode}`);
     console.log(`💼 Wallet: ${this.walletPublicKey?.substring(0, 8)}...`);
     console.log(`🔍 Platforms: ${this.platforms.join(', ')}`);
     console.log(`💰 Buy Amount: ${this.buyAmount} SOL`);
     console.log(`🛡️ Stop Loss: ${this.stopLoss * 100}%`);
     console.log(`🎯 Take Profit: ${this.takeProfit * 100}%`);
+
+    // Check backend connectivity for Phase 2-3 features
+    const backendHealth = await this.backend.checkHealth();
+    if (backendHealth.success) {
+      console.log(`✓ Fenrir Backend connected`);
+      console.log(`  - Database: ${backendHealth.services.trade_db ? '✓' : '✗'}`);
+      console.log(`  - AI Analysis: ${backendHealth.services.ai_analyst ? '✓' : '✗'}`);
+      console.log(`  - Jito MEV: ${backendHealth.services.jito ? '✓' : '✗'}`);
+      this.backendConnected = true;
+    } else {
+      console.log(`⚠️ Fenrir Backend not available - running in standalone mode`);
+      this.backendConnected = false;
+    }
 
     if (this.mode === 'live' && !this.walletPrivateKey) {
       throw new Error('Private key required for live trading');
@@ -472,7 +497,7 @@ export class LiveTradingEngine {
       return;
     }
 
-    // Calculate risk score (0-1, higher is riskier)
+    // Calculate basic risk score (0-1, higher is riskier)
     const riskScore = this.calculateRiskScore(token);
 
     console.log(`📊 Token Analysis: ${token.symbol || token.address.substring(0, 8)}`);
@@ -480,6 +505,38 @@ export class LiveTradingEngine {
     console.log(`   Liquidity: ${token.liquidity?.toFixed(2)} SOL`);
     console.log(`   Market Cap: ${token.marketCap?.toFixed(2)} SOL`);
     console.log(`   Holders: ${token.holders}`);
+
+    // Phase 3: AI Analysis (if enabled and backend connected)
+    let aiDecision = null;
+    if (this.useAIAnalysis && this.backendConnected) {
+      console.log(`🤖 Running AI analysis...`);
+      aiDecision = await this.backend.analyzeToken(token);
+
+      if (aiDecision && !aiDecision.error) {
+        console.log(`   AI Decision: ${aiDecision.decision.toUpperCase()}`);
+        console.log(`   AI Confidence: ${(aiDecision.confidence * 100).toFixed(0)}%`);
+        console.log(`   AI Risk Score: ${aiDecision.risk_score}/10`);
+
+        if (aiDecision.red_flags?.length > 0) {
+          console.log(`   🚩 Red Flags: ${aiDecision.red_flags.slice(0, 3).join(', ')}`);
+        }
+        if (aiDecision.green_flags?.length > 0) {
+          console.log(`   ✅ Green Flags: ${aiDecision.green_flags.slice(0, 3).join(', ')}`);
+        }
+
+        // Use AI decision if confidence is high enough
+        if (aiDecision.confidence >= 0.7) {
+          if (aiDecision.decision === 'strong_buy' || aiDecision.decision === 'buy') {
+            console.log(`✅ AI recommends BUY, executing trade...`);
+            await this.executeBuy(token, aiDecision);
+            return;
+          } else {
+            console.log(`❌ AI recommends ${aiDecision.decision.toUpperCase()}, skipping`);
+            return;
+          }
+        }
+      }
+    }
 
     // Decision threshold - only trade if risk is acceptable
     const riskThreshold = 0.6; // 60%
@@ -535,14 +592,17 @@ export class LiveTradingEngine {
   /**
    * Execute buy trade
    */
-  async executeBuy(token) {
+  async executeBuy(token, aiDecision = null) {
     try {
-      console.log(`💰 Buying ${this.buyAmount} SOL of ${token.symbol || token.address.substring(0, 8)}...`);
+      // Use AI-suggested amount if available
+      const buyAmount = aiDecision?.suggested_buy_amount_sol || this.buyAmount;
+
+      console.log(`💰 Buying ${buyAmount} SOL of ${token.symbol || token.address.substring(0, 8)}...`);
 
       const trade = {
         type: 'buy',
         tokenAddress: token.address,
-        amount: this.buyAmount,
+        amount: buyAmount,
         wallet: this.walletPublicKey
       };
 
@@ -553,7 +613,7 @@ export class LiveTradingEngine {
         result = await this.tradingAPI.executeTrade({
           action: 'buy',
           token_address: token.address,
-          amount: this.buyAmount
+          amount: buyAmount
         });
       } else {
         // Simulation mode
@@ -561,7 +621,7 @@ export class LiveTradingEngine {
           success: true,
           signature: 'simulation_' + Date.now(),
           price: token.price || 0.001,
-          amount: this.buyAmount / (token.price || 0.001)
+          amount: buyAmount / (token.price || 0.001)
         };
       }
 
@@ -573,14 +633,15 @@ export class LiveTradingEngine {
           entryPrice: result.price || token.price,
           currentPrice: result.price || token.price, // Initialize with entry price
           entryTime: Date.now(),
-          amount: this.buyAmount,
-          tokensOwned: result.amount || (this.buyAmount / (token.price || 0.001)),
+          amount: buyAmount,
+          tokensOwned: result.amount || (buyAmount / (token.price || 0.001)),
           signature: result.signature,
-          stopLoss: (result.price || token.price) * (1 - this.stopLoss),
-          takeProfit: (result.price || token.price) * (1 + this.takeProfit),
+          stopLoss: (result.price || token.price) * (1 - (aiDecision?.suggested_stop_loss_pct / 100 || this.stopLoss)),
+          takeProfit: (result.price || token.price) * (1 + (aiDecision?.suggested_take_profit_pct / 100 || this.takeProfit)),
           trailingStopPrice: null,
           highestPrice: result.price || token.price,
-          symbol: token.symbol || null
+          symbol: token.symbol || null,
+          aiDecision: aiDecision
         };
 
         this.activePositions.set(token.address, position);
@@ -588,6 +649,29 @@ export class LiveTradingEngine {
 
         console.log(`✅ Trade executed! Signature: ${result.signature}`);
         this.onTradeExecuted({ trade, result, position });
+
+        // Phase 2: Record to database if backend connected
+        if (this.useDatabase && this.backendConnected) {
+          try {
+            const dbPosition = await this.backend.openPosition({
+              tokenMint: token.address,
+              symbol: token.symbol,
+              entryPrice: position.entryPrice,
+              amountTokens: position.tokensOwned,
+              amountSol: buyAmount,
+              signature: result.signature,
+              strategy: aiDecision ? 'ai_analysis' : 'risk_score',
+              notes: aiDecision?.reasoning?.substring(0, 200) || ''
+            });
+
+            if (dbPosition?.position_id) {
+              position.dbPositionId = dbPosition.position_id;
+              console.log(`📝 Position recorded in database (ID: ${dbPosition.position_id})`);
+            }
+          } catch (dbError) {
+            console.error('Database recording failed:', dbError);
+          }
+        }
 
       } else {
         console.error(`❌ Trade failed:`, result.error || result);
@@ -753,6 +837,22 @@ export class LiveTradingEngine {
         this.activePositions.delete(position.tokenAddress);
         this.watchlist.delete(position.tokenAddress);
 
+        // Phase 2: Close position in database if backend connected
+        if (this.useDatabase && this.backendConnected && position.dbPositionId) {
+          try {
+            await this.backend.closePosition(position.dbPositionId, {
+              price: currentPrice,
+              amountTokens: position.tokensOwned,
+              amountSol: result.proceeds || (position.tokensOwned * currentPrice),
+              signature: result.signature,
+              reason: reason
+            });
+            console.log(`📝 Position closed in database`);
+          } catch (dbError) {
+            console.error('Database close position failed:', dbError);
+          }
+        }
+
       } else {
         console.error(`❌ Sell failed:`, result.error || result);
       }
@@ -845,6 +945,99 @@ export class LiveTradingEngine {
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //                      PHASE 3: PERFORMANCE ANALYTICS
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Get performance summary from database
+   */
+  async getPerformanceSummary(days = 30) {
+    if (!this.backendConnected) {
+      return { error: 'Backend not connected' };
+    }
+    return await this.backend.getPerformanceSummary(days);
+  }
+
+  /**
+   * Get formatted performance report
+   */
+  async getPerformanceReport(days = 30) {
+    if (!this.backendConnected) {
+      return { error: 'Backend not connected' };
+    }
+    return await this.backend.getPerformanceReport(days);
+  }
+
+  /**
+   * Get best performing tokens
+   */
+  async getTopTokens(limit = 20) {
+    if (!this.backendConnected) {
+      return { error: 'Backend not connected' };
+    }
+    return await this.backend.getTokenPerformance(limit);
+  }
+
+  /**
+   * Get recent trades from database
+   */
+  async getTradeHistory(limit = 50) {
+    if (!this.backendConnected) {
+      return { error: 'Backend not connected' };
+    }
+    return await this.backend.getRecentTrades(limit);
+  }
+
+  /**
+   * Get closed positions with P&L
+   */
+  async getPositionHistory(days = 30) {
+    if (!this.backendConnected) {
+      return { error: 'Backend not connected' };
+    }
+    return await this.backend.getClosedPositions(days);
+  }
+
+  /**
+   * Check backend connection status
+   */
+  async checkBackendStatus() {
+    const health = await this.backend.checkHealth();
+    this.backendConnected = health.success;
+    return health;
+  }
+
+  /**
+   * Get aggregated price from multiple sources
+   */
+  async getAggregatedPrice(tokenMint) {
+    if (!this.backendConnected) {
+      return null;
+    }
+    return await this.backend.getPrice(tokenMint);
+  }
+
+  /**
+   * Get AI analysis for a token
+   */
+  async getAIAnalysis(token) {
+    if (!this.backendConnected) {
+      return { error: 'Backend not connected' };
+    }
+    return await this.backend.analyzeToken(token);
+  }
+
+  /**
+   * Get Jito MEV protection status
+   */
+  async getJitoStatus() {
+    if (!this.backendConnected) {
+      return { enabled: false, reason: 'Backend not connected' };
+    }
+    return await this.backend.getJitoStatus();
   }
 }
 
