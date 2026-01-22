@@ -92,6 +92,7 @@ import { Toast, APIKeyModal, OutputItem, Dashboard } from "./components";
 import ThemeToggle from "./components/ThemeDropdown";
 import DegenerateTownView from "./components/DegenerateTownView";
 import DegenerateTownPixi from "./components/DegenerateTownPixi";
+import DegenerateTownAnimated from "./components/DegenerateTownAnimated";
 
 import {
   LineChart,
@@ -433,6 +434,7 @@ export default function AITerminalAgent() {
   const [dashboardCoinId, setDashboardCoinId] = useState('bitcoin');
   const [showDegenView, setShowDegenView] = useState(false);
   const [showDegenPixi, setShowDegenPixi] = useState(false);
+  const [showDegenAnimated, setShowDegenAnimated] = useState(false);
   const [conversationHistory, setConversationHistory] = useState(() => {
     // Load conversation history from localStorage on init
     try {
@@ -1332,7 +1334,8 @@ Category requested: ${toolArgs.category || 'none'}`,
   degen speed <1-10>           - Adjust simulation speed
   degen reset                  - Reset all learning data
   degen view                   - Toggle Canvas visualization
-  degen pixi                   - Toggle PixiJS visualization (enhanced)
+  degen pixi                   - Toggle PixiJS visualization
+  degen animated               - Toggle FULL animation (CraftPix sprites)
 
 🌐 WEB3 WALLET (Secure - Recommended)
   web3 connect [phantom|solflare] - Connect Web3 wallet (secure)
@@ -6544,7 +6547,8 @@ Commands:
 • degen speed <ms> - Set simulation speed (100-5000ms)
 • degen reset - Reset all agent learning
 • degen view - Toggle Canvas visualization (lightweight)
-• degen pixi - Toggle PixiJS visualization (enhanced graphics)
+• degen pixi - Toggle PixiJS visualization (enhanced)
+• degen animated - Toggle FULL animation (CraftPix sprites)
 
 Norse Runes:
 ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NORSE_RUNES.profit} Profit  ${NORSE_RUNES.loss} Loss`
@@ -6888,14 +6892,41 @@ ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NO
 
                 case "pixi": {
                   setShowDegenPixi(prev => !prev);
-                  setShowDegenView(false); // Close Canvas view if open
+                  setShowDegenView(false);
+                  setShowDegenAnimated(false);
                   addOutput({
                     type: "info",
                     content: showDegenPixi
                       ? "🎮 Closing PixiJS simulation..."
-                      : "🎮 Opening Degenerate Town PixiJS visualization...\n\n⚡ Enhanced graphics with particle effects and animations!"
+                      : "🎮 Opening Degenerate Town PixiJS visualization...\n\n⚡ Enhanced graphics with particle effects!"
                   });
                   showToast(showDegenPixi ? "PixiJS closed" : "PixiJS view opened", "success");
+                  break;
+                }
+
+                case "animated":
+                case "full": {
+                  setShowDegenAnimated(prev => !prev);
+                  setShowDegenView(false);
+                  setShowDegenPixi(false);
+                  addOutput({
+                    type: "info",
+                    content: showDegenAnimated
+                      ? "🎮 Closing animated simulation..."
+                      : `🎮 Opening Degenerate Town FULL visualization...
+
+⚡ FEATURES:
+• CraftPix spritesheet animation support
+• Character walk cycles and actions
+• Particle systems for trading effects
+• Dynamic lighting and glow
+• Screen shake and flash effects
+• Parallax backgrounds
+
+💡 Add custom sprites to public/assets/sprites/
+   Run: node scripts/setupCraftPixAssets.js for setup guide`
+                  });
+                  showToast(showDegenAnimated ? "Animated closed" : "Full animation opened", "success");
                   break;
                 }
 
@@ -7628,6 +7659,41 @@ Type "help" for commands`,
             right: 0,
             bottom: 0,
             background: 'rgba(0, 0, 0, 0.8)',
+            zIndex: 1000,
+          }}
+        />
+      )}
+
+      {/* Degenerate Town FULL Animated Visualization */}
+      {showDegenAnimated && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 1001,
+          boxShadow: '0 10px 50px rgba(0, 255, 65, 0.4)',
+          borderRadius: '12px',
+          overflow: 'hidden',
+        }}>
+          <DegenerateTownAnimated
+            compact={false}
+            onClose={() => setShowDegenAnimated(false)}
+          />
+        </div>
+      )}
+
+      {/* Backdrop for Animated modal */}
+      {showDegenAnimated && (
+        <div
+          onClick={() => setShowDegenAnimated(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.85)',
             zIndex: 1000,
           }}
         />
