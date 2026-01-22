@@ -1,33 +1,72 @@
 /**
- * Telegram Scanner Service
+ * Telegram Scanner Service (Browser-Compatible)
  *
- * Manages the Python Telegram bot as a child process and provides
- * a WebSocket bridge to receive token alerts in the Terminal UI.
+ * Connects to an externally running Python Telegram bot via WebSocket.
+ * The Python bot must be started separately (e.g., via command line).
+ *
+ * To start the Python bot:
+ *   cd telegram-scanner && python telegram_bot.py
  */
 
-import { spawn } from 'child_process';
-import WebSocket from 'ws';
-import EventEmitter from 'events';
-import path from 'path';
-import { fileURLToPath } from 'url';
+/**
+ * Browser-compatible EventEmitter implementation
+ */
+class BrowserEventEmitter {
+  constructor() {
+    this._events = {};
+  }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+  on(event, listener) {
+    if (!this._events[event]) {
+      this._events[event] = [];
+    }
+    this._events[event].push(listener);
+    return this;
+  }
 
-class TelegramScannerService extends EventEmitter {
+  off(event, listener) {
+    if (!this._events[event]) return this;
+    this._events[event] = this._events[event].filter(l => l !== listener);
+    return this;
+  }
+
+  emit(event, ...args) {
+    if (!this._events[event]) return false;
+    this._events[event].forEach(listener => {
+      try {
+        listener(...args);
+      } catch (error) {
+        console.error(`Error in event listener for ${event}:`, error);
+      }
+    });
+    return true;
+  }
+
+  removeAllListeners(event) {
+    if (event) {
+      delete this._events[event];
+    } else {
+      this._events = {};
+    }
+    return this;
+  }
+}
+
+class TelegramScannerService extends BrowserEventEmitter {
   constructor() {
     super();
 
-    this.pythonProcess = null;
     this.ws = null;
     this.isRunning = false;
+    this.isConnected = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 5000;
+    this.reconnectTimer = null;
 
-    // Configuration
-    this.wsPort = process.env.TELEGRAM_WS_PORT || 8766;
-    this.httpPort = process.env.TELEGRAM_HTTP_PORT || 8765;
+    // Configuration - adjust these based on your Python bot settings
+    this.wsPort = 8766;
+    this.httpPort = 8765;
 
     // Statistics
     this.stats = {
@@ -43,7 +82,8 @@ class TelegramScannerService extends EventEmitter {
   }
 
   /**
-   * Start the Python Telegram bot and connect to its WebSocket
+   * Start connecting to the Telegram bot WebSocket
+   * Note: The Python bot must be started externally
    */
   async start() {
     if (this.isRunning) {
@@ -52,46 +92,9 @@ class TelegramScannerService extends EventEmitter {
     }
 
     try {
-      // Start Python bot process
-      const botPath = path.join(process.cwd(), 'telegram-scanner', 'telegram_bot.py');
-
-      console.log('[TelegramScanner] Starting Python bot...');
-      console.log('[TelegramScanner] Bot path:', botPath);
-
-      this.pythonProcess = spawn('python', [botPath], {
-        cwd: process.cwd(),
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env }
-      });
-
-      // Handle Python process output
-      this.pythonProcess.stdout.on('data', (data) => {
-        const output = data.toString().trim();
-        console.log(`[TelegramBot] ${output}`);
-        this.emit('log', { level: 'info', message: output });
-      });
-
-      this.pythonProcess.stderr.on('data', (data) => {
-        const output = data.toString().trim();
-        console.error(`[TelegramBot] ${output}`);
-        this.emit('log', { level: 'error', message: output });
-      });
-
-      this.pythonProcess.on('error', (error) => {
-        console.error('[TelegramScanner] Process error:', error);
-        this.emit('error', error);
-        this.isRunning = false;
-      });
-
-      this.pythonProcess.on('exit', (code, signal) => {
-        console.log(`[TelegramScanner] Process exited with code ${code}, signal ${signal}`);
-        this.isRunning = false;
-        this.pythonProcess = null;
-        this.emit('stopped', { code, signal });
-      });
-
-      // Wait for bot to start and then connect to WebSocket
-      await this.sleep(3000); // Give bot time to initialize
+      console.log('[TelegramScanner] Connecting to Python bot WebSocket...');
+      console.log('[TelegramScanner] Note: Make sure the Python bot is running:');
+      console.log('[TelegramScanner]   cd telegram-scanner && python telegram_bot.py');
 
       await this.connectWebSocket();
 
@@ -100,19 +103,22 @@ class TelegramScannerService extends EventEmitter {
 
       return {
         success: true,
-        message: 'Telegram scanner started successfully',
+        message: 'Telegram scanner connected successfully',
         wsPort: this.wsPort,
         httpPort: this.httpPort
       };
 
     } catch (error) {
       console.error('[TelegramScanner] Start error:', error);
-      return { success: false, message: error.message };
+      return {
+        success: false,
+        message: `Failed to connect: ${error.message}. Is the Python bot running?`
+      };
     }
   }
 
   /**
-   * Connect to Python bot's WebSocket server
+   * Connect to Python bot's WebSocket server using browser WebSocket
    */
   async connectWebSocket() {
     return new Promise((resolve, reject) => {
@@ -120,46 +126,58 @@ class TelegramScannerService extends EventEmitter {
         const wsUrl = `ws://localhost:${this.wsPort}`;
         console.log(`[TelegramScanner] Connecting to ${wsUrl}...`);
 
+        // Use browser native WebSocket
         this.ws = new WebSocket(wsUrl);
 
-        this.ws.on('open', () => {
+        const timeout = setTimeout(() => {
+          if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
+            this.ws.close();
+            reject(new Error('Connection timeout'));
+          }
+        }, 10000);
+
+        this.ws.onopen = () => {
+          clearTimeout(timeout);
           console.log('[TelegramScanner] WebSocket connected');
+          this.isConnected = true;
           this.reconnectAttempts = 0;
           this.emit('connected');
           resolve();
-        });
+        };
 
-        this.ws.on('message', (data) => {
+        this.ws.onmessage = (event) => {
           try {
-            const message = JSON.parse(data.toString());
+            const message = JSON.parse(event.data);
             this.handleWebSocketMessage(message);
           } catch (error) {
             console.error('[TelegramScanner] Failed to parse message:', error);
           }
-        });
+        };
 
-        this.ws.on('error', (error) => {
+        this.ws.onerror = (error) => {
+          clearTimeout(timeout);
           console.error('[TelegramScanner] WebSocket error:', error);
           this.emit('ws_error', error);
-          reject(error);
-        });
+          reject(new Error('WebSocket connection failed'));
+        };
 
-        this.ws.on('close', () => {
+        this.ws.onclose = () => {
           console.log('[TelegramScanner] WebSocket disconnected');
+          this.isConnected = false;
           this.emit('disconnected');
 
-          // Attempt reconnection if bot is still running
+          // Attempt reconnection if service is still running
           if (this.isRunning && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
             console.log(`[TelegramScanner] Reconnecting... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
-            setTimeout(() => {
+            this.reconnectTimer = setTimeout(() => {
               this.connectWebSocket().catch(err => {
                 console.error('[TelegramScanner] Reconnection failed:', err);
               });
             }, this.reconnectDelay);
           }
-        });
+        };
 
       } catch (error) {
         reject(error);
@@ -198,7 +216,7 @@ class TelegramScannerService extends EventEmitter {
   }
 
   /**
-   * Stop the Python bot
+   * Stop the WebSocket connection
    */
   async stop() {
     if (!this.isRunning) {
@@ -207,27 +225,21 @@ class TelegramScannerService extends EventEmitter {
 
     console.log('[TelegramScanner] Stopping...');
 
+    // Clear reconnect timer
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     // Close WebSocket
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
 
-    // Kill Python process
-    if (this.pythonProcess) {
-      this.pythonProcess.kill('SIGTERM');
-
-      // Force kill after timeout
-      setTimeout(() => {
-        if (this.pythonProcess) {
-          console.log('[TelegramScanner] Force killing process...');
-          this.pythonProcess.kill('SIGKILL');
-        }
-      }, 5000);
-    }
-
     this.isRunning = false;
-    this.emit('stopped', { code: 0, signal: 'SIGTERM' });
+    this.isConnected = false;
+    this.emit('stopped', { code: 0, signal: 'manual' });
 
     return { success: true, message: 'Telegram scanner stopped' };
   }
@@ -239,6 +251,7 @@ class TelegramScannerService extends EventEmitter {
     if (!this.isRunning) {
       return {
         running: false,
+        connected: false,
         stats: this.stats
       };
     }
@@ -250,16 +263,16 @@ class TelegramScannerService extends EventEmitter {
 
       return {
         running: true,
-        connected: this.ws?.readyState === WebSocket.OPEN,
+        connected: this.isConnected,
         stats: this.stats,
         botStatus
       };
     } catch (error) {
       return {
         running: this.isRunning,
-        connected: this.ws?.readyState === WebSocket.OPEN,
+        connected: this.isConnected,
         stats: this.stats,
-        error: error.message
+        error: 'Could not reach Python bot HTTP API'
       };
     }
   }
@@ -311,13 +324,6 @@ class TelegramScannerService extends EventEmitter {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'ping' }));
     }
-  }
-
-  /**
-   * Utility sleep function
-   */
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 

@@ -5,7 +5,6 @@
  * Each agent learns via Q-Learning and makes autonomous trading decisions.
  */
 
-import { EventEmitter } from 'events';
 import {
   NORSE_AGENTS,
   NORSE_RUNES,
@@ -14,7 +13,51 @@ import {
   DEGENERATE_TOWN_CONFIG
 } from '../config/degenerateTown.js';
 
-class DegenerateTownService extends EventEmitter {
+/**
+ * Browser-compatible EventEmitter implementation
+ */
+class BrowserEventEmitter {
+  constructor() {
+    this._events = {};
+  }
+
+  on(event, listener) {
+    if (!this._events[event]) {
+      this._events[event] = [];
+    }
+    this._events[event].push(listener);
+    return this;
+  }
+
+  off(event, listener) {
+    if (!this._events[event]) return this;
+    this._events[event] = this._events[event].filter(l => l !== listener);
+    return this;
+  }
+
+  emit(event, ...args) {
+    if (!this._events[event]) return false;
+    this._events[event].forEach(listener => {
+      try {
+        listener(...args);
+      } catch (error) {
+        console.error(`Error in event listener for ${event}:`, error);
+      }
+    });
+    return true;
+  }
+
+  removeAllListeners(event) {
+    if (event) {
+      delete this._events[event];
+    } else {
+      this._events = {};
+    }
+    return this;
+  }
+}
+
+class DegenerateTownService extends BrowserEventEmitter {
   constructor() {
     super();
 
