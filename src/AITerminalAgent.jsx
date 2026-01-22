@@ -90,6 +90,7 @@ import {
 // Import components
 import { Toast, APIKeyModal, OutputItem, Dashboard } from "./components";
 import ThemeToggle from "./components/ThemeDropdown";
+import DegenerateTownView from "./components/DegenerateTownView";
 
 import {
   LineChart,
@@ -429,6 +430,7 @@ export default function AITerminalAgent() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardSymbol, setDashboardSymbol] = useState('BTC');
   const [dashboardCoinId, setDashboardCoinId] = useState('bitcoin');
+  const [showDegenView, setShowDegenView] = useState(false);
   const [conversationHistory, setConversationHistory] = useState(() => {
     // Load conversation history from localStorage on init
     try {
@@ -1327,6 +1329,7 @@ Category requested: ${toolArgs.category || 'none'}`,
   degen events [limit]         - View market events
   degen speed <1-10>           - Adjust simulation speed
   degen reset                  - Reset all learning data
+  degen view                   - Toggle visual simulation panel
 
 🌐 WEB3 WALLET (Secure - Recommended)
   web3 connect [phantom|solflare] - Connect Web3 wallet (secure)
@@ -6537,6 +6540,7 @@ Commands:
 • degen events [limit] - Show market events
 • degen speed <ms> - Set simulation speed (100-5000ms)
 • degen reset - Reset all agent learning
+• degen view - Toggle visual simulation display
 
 Norse Runes:
 ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NORSE_RUNES.profit} Profit  ${NORSE_RUNES.loss} Loss`
@@ -6862,6 +6866,18 @@ ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NO
                     content: `✅ All agent learning has been reset!\n\nThe Norse gods will start learning from scratch.\nTheir Q-tables have been cleared and balances restored to 10 SOL.`
                   });
                   showToast("Agent learning reset", "success");
+                  break;
+                }
+
+                case "view": {
+                  setShowDegenView(prev => !prev);
+                  addOutput({
+                    type: "info",
+                    content: showDegenView
+                      ? "🎮 Closing Degenerate Town visual simulation..."
+                      : "🎮 Opening Degenerate Town visual simulation...\n\nThe Norse gods trading floor is now visible!"
+                  });
+                  showToast(showDegenView ? "Visual closed" : "Visual opened", "success");
                   break;
                 }
 
@@ -7524,6 +7540,45 @@ Type "help" for commands`,
         symbol={dashboardSymbol}
         coinId={dashboardCoinId}
       />
+
+      {/* Degenerate Town Visual Simulation */}
+      {showDegenView && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          zIndex: 1000,
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            background: '#1a1a2e',
+            padding: '8px 12px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottom: '1px solid #333',
+          }}>
+            <span style={{ color: '#ffd700', fontFamily: 'monospace', fontSize: '12px' }}>
+              DEGENERATE TOWN
+            </span>
+            <button
+              onClick={() => setShowDegenView(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#ff4444',
+                cursor: 'pointer',
+                fontSize: '16px',
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <DegenerateTownView compact={true} />
+        </div>
+      )}
     </div>
   );
 }
