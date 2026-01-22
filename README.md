@@ -249,6 +249,44 @@ A systematic 4-phase framework for discovering high-potential tokens:
 - `timeline` - Days, Weeks, Months, Years
 - `autoScoutTelegramAlerts` - Auto-analyze Telegram token alerts (true/false)
 
+### 🏛️ Degenerate Town (Norse AI Trading Simulation)
+
+An AI-powered trading simulation featuring 7 Norse god agents using Q-Learning:
+
+- `degen start` - Start the Q-Learning simulation
+- `degen stop` - Stop the simulation
+- `degen status` - View realm statistics (total trades, profits, events)
+- `degen agents` - List all Norse god agents with their strategies
+- `degen agent <name>` - View detailed agent statistics and Q-table
+- `degen leaderboard` - Show agent rankings by profit
+- `degen trades [limit]` - View recent trades executed
+- `degen events [limit]` - View market events (RAGNAROK, ODIN_BLESSING, etc.)
+- `degen speed <1-10>` - Adjust simulation speed (1=slow, 10=fast)
+- `degen reset` - Reset all learning data and start fresh
+
+**Norse Agents:**
+
+| Agent | Strategy | Personality |
+|-------|----------|-------------|
+| Odin | Swing Divine | High wisdom, patient |
+| Thor | Momentum Hammer | Aggressive, brave |
+| Loki | Contrarian Trickster | Deceptive, opportunistic |
+| Freyja | Mean Reversion | Patient, balanced |
+| Fenrir | Aggressive Breakout | Very aggressive, chaos-seeking |
+| Heimdall | Conservative Guardian | Cautious, protective |
+| Skadi | Cold Scalper | Fearless, precise |
+
+**Market Events:**
+
+- RAGNAROK (rare) - Market chaos, -50% to +100% price swings
+- ODIN_BLESSING - Wisdom boost for all agents
+- THOR_THUNDER - Momentum surge
+- LOKI_TRICK - Unexpected reversals
+- FREYJA_FERTILITY - Increased market opportunities
+- BIFROST_BRIDGE - Cross-realm trading bonus
+- HEIMDALL_WARNING - Risk reduction period
+- SKADI_WINTER - Market cooling/consolidation
+
 ### 📊 Crypto Data & Analysis
 
 - `price [symbol]` - Get current price
@@ -473,6 +511,7 @@ Contributions welcome! Please:
 - [ ] Mobile app version
 - [x] Telegram bot integration
 - [x] Scout Module (100x Token Discovery Framework)
+- [x] Degenerate Town (Norse AI Trading Simulation with Q-Learning)
 - [ ] Advanced chart analysis tools
 - [ ] Multi-AI ensemble analysis
 
