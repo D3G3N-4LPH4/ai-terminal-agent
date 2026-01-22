@@ -91,6 +91,7 @@ import {
 import { Toast, APIKeyModal, OutputItem, Dashboard } from "./components";
 import ThemeToggle from "./components/ThemeDropdown";
 import DegenerateTownView from "./components/DegenerateTownView";
+import DegenerateTownPixi from "./components/DegenerateTownPixi";
 
 import {
   LineChart,
@@ -431,6 +432,7 @@ export default function AITerminalAgent() {
   const [dashboardSymbol, setDashboardSymbol] = useState('BTC');
   const [dashboardCoinId, setDashboardCoinId] = useState('bitcoin');
   const [showDegenView, setShowDegenView] = useState(false);
+  const [showDegenPixi, setShowDegenPixi] = useState(false);
   const [conversationHistory, setConversationHistory] = useState(() => {
     // Load conversation history from localStorage on init
     try {
@@ -1329,7 +1331,8 @@ Category requested: ${toolArgs.category || 'none'}`,
   degen events [limit]         - View market events
   degen speed <1-10>           - Adjust simulation speed
   degen reset                  - Reset all learning data
-  degen view                   - Toggle visual simulation panel
+  degen view                   - Toggle Canvas visualization
+  degen pixi                   - Toggle PixiJS visualization (enhanced)
 
 🌐 WEB3 WALLET (Secure - Recommended)
   web3 connect [phantom|solflare] - Connect Web3 wallet (secure)
@@ -6540,7 +6543,8 @@ Commands:
 • degen events [limit] - Show market events
 • degen speed <ms> - Set simulation speed (100-5000ms)
 • degen reset - Reset all agent learning
-• degen view - Toggle visual simulation display
+• degen view - Toggle Canvas visualization (lightweight)
+• degen pixi - Toggle PixiJS visualization (enhanced graphics)
 
 Norse Runes:
 ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NORSE_RUNES.profit} Profit  ${NORSE_RUNES.loss} Loss`
@@ -6871,13 +6875,27 @@ ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NO
 
                 case "view": {
                   setShowDegenView(prev => !prev);
+                  setShowDegenPixi(false); // Close PixiJS view if open
                   addOutput({
                     type: "info",
                     content: showDegenView
                       ? "🎮 Closing Degenerate Town visual simulation..."
-                      : "🎮 Opening Degenerate Town visual simulation...\n\nThe Norse gods trading floor is now visible!"
+                      : "🎮 Opening Degenerate Town Canvas visualization...\n\nThe Norse gods trading floor is now visible!"
                   });
-                  showToast(showDegenView ? "Visual closed" : "Visual opened", "success");
+                  showToast(showDegenView ? "Visual closed" : "Canvas view opened", "success");
+                  break;
+                }
+
+                case "pixi": {
+                  setShowDegenPixi(prev => !prev);
+                  setShowDegenView(false); // Close Canvas view if open
+                  addOutput({
+                    type: "info",
+                    content: showDegenPixi
+                      ? "🎮 Closing PixiJS simulation..."
+                      : "🎮 Opening Degenerate Town PixiJS visualization...\n\n⚡ Enhanced graphics with particle effects and animations!"
+                  });
+                  showToast(showDegenPixi ? "PixiJS closed" : "PixiJS view opened", "success");
                   break;
                 }
 
@@ -7541,7 +7559,7 @@ Type "help" for commands`,
         coinId={dashboardCoinId}
       />
 
-      {/* Degenerate Town Visual Simulation */}
+      {/* Degenerate Town Canvas Visualization */}
       {showDegenView && (
         <div style={{
           position: 'fixed',
@@ -7561,7 +7579,7 @@ Type "help" for commands`,
             borderBottom: '1px solid #333',
           }}>
             <span style={{ color: '#ffd700', fontFamily: 'monospace', fontSize: '12px' }}>
-              DEGENERATE TOWN
+              DEGENERATE TOWN (Canvas)
             </span>
             <button
               onClick={() => setShowDegenView(false)}
@@ -7578,6 +7596,41 @@ Type "help" for commands`,
           </div>
           <DegenerateTownView compact={true} />
         </div>
+      )}
+
+      {/* Degenerate Town PixiJS Visualization (Enhanced) */}
+      {showDegenPixi && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 1001,
+          boxShadow: '0 8px 40px rgba(0, 255, 65, 0.3)',
+          borderRadius: '10px',
+          overflow: 'hidden',
+        }}>
+          <DegenerateTownPixi
+            compact={false}
+            onClose={() => setShowDegenPixi(false)}
+          />
+        </div>
+      )}
+
+      {/* Backdrop for PixiJS modal */}
+      {showDegenPixi && (
+        <div
+          onClick={() => setShowDegenPixi(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            zIndex: 1000,
+          }}
+        />
       )}
     </div>
   );
