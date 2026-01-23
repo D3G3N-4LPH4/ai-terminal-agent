@@ -1,0 +1,218 @@
+/**
+ * Responsive Design Utilities for AI Terminal Agent
+ *
+ * Mobile-first responsive classes to supplement Tailwind.
+ * Breakpoints: sm (640px), md (768px), lg (1024px), xl (1280px)
+ */
+
+/* ==================== BASE MOBILE STYLES ==================== */
+
+/* Terminal container - full width on mobile */
+.terminal-container {
+  width: 100%;
+  min-height: 100vh;
+  padding: 0.5rem;
+}
+
+/* Reduce font size on mobile */
+.terminal-output {
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* Command input - larger touch target on mobile */
+.command-input {
+  min-height: 44px; /* iOS minimum touch target */
+  font-size: 16px; /* Prevents zoom on iOS */
+}
+
+/* Charts - smaller on mobile */
+.chart-container {
+  height: 200px;
+}
+
+/* Hide secondary info on mobile */
+.mobile-hidden {
+  display: none;
+}
+
+/* Stack elements vertically on mobile */
+.mobile-stack {
+  flex-direction: column;
+}
+
+/* Full width buttons on mobile */
+.mobile-full-btn {
+  width: 100%;
+}
+
+/* ==================== TABLET (sm: 640px+) ==================== */
+
+@media (min-width: 640px) {
+  .terminal-container {
+    padding: 1rem;
+  }
+
+  .terminal-output {
+    font-size: 0.8125rem;
+  }
+
+  .chart-container {
+    height: 250px;
+  }
+
+  /* Show some hidden elements */
+  .sm\:mobile-visible {
+    display: block;
+  }
+
+  .sm\:mobile-stack {
+    flex-direction: row;
+  }
+}
+
+/* ==================== MEDIUM (md: 768px+) ==================== */
+
+@media (min-width: 768px) {
+  .terminal-container {
+    padding: 1.5rem;
+  }
+
+  .terminal-output {
+    font-size: 0.875rem;
+  }
+
+  .chart-container {
+    height: 300px;
+  }
+
+  /* Show previously hidden elements */
+  .md\:mobile-visible {
+    display: block;
+  }
+
+  .md\:mobile-stack {
+    flex-direction: row;
+  }
+
+  .md\:mobile-full-btn {
+    width: auto;
+  }
+}
+
+/* ==================== LARGE (lg: 1024px+) ==================== */
+
+@media (min-width: 1024px) {
+  .terminal-container {
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .terminal-output {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .chart-container {
+    height: 350px;
+  }
+
+  /* Show all hidden elements */
+  .lg\:mobile-visible,
+  .mobile-hidden {
+    display: block;
+  }
+}
+
+/* ==================== EXTRA LARGE (xl: 1280px+) ==================== */
+
+@media (min-width: 1280px) {
+  .terminal-container {
+    max-width: 1600px;
+  }
+
+  .chart-container {
+    height: 400px;
+  }
+}
+
+/* ==================== UTILITY CLASSES ==================== */
+
+/* Touch-friendly tap targets */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Scrollable container with momentum scrolling */
+.scroll-container {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Safe area padding for notched devices */
+.safe-area-padding {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent text selection on interactive elements */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Smooth transitions */
+.transition-all-smooth {
+  transition: all 0.2s ease-in-out;
+}
+
+/* ==================== DARK MODE ADJUSTMENTS ==================== */
+
+/* Ensure readability in dark mode on mobile */
+@media (prefers-color-scheme: dark) {
+  .terminal-output {
+    text-shadow: 0 0 1px rgba(0, 255, 65, 0.3);
+  }
+}
+
+/* ==================== REDUCED MOTION ==================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .animate-pulse,
+  .animate-spin,
+  .animate-bounce {
+    animation: none !important;
+  }
+}
+
+/* ==================== PRINT STYLES ==================== */
+
+@media print {
+  .terminal-container {
+    background: white !important;
+    color: black !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .chart-container {
+    break-inside: avoid;
+  }
+}

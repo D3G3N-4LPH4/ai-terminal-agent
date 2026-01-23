@@ -3,6 +3,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
@@ -13,6 +14,65 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Centralized API proxy helper
+ * Reduces code duplication across proxy endpoints
+ * @param {Object} options - Proxy options
+ * @param {string} options.url - Target URL
+ * @param {string} options.method - HTTP method
+ * @param {Object} options.headers - Request headers
+ * @param {Object|undefined} options.body - Request body (for non-GET)
+ * @param {Object} res - Express response object
+ * @param {string} options.errorPrefix - Prefix for error logs
+ */
+async function proxyRequest({ url, method = 'GET', headers = {}, body, res, errorPrefix = 'Proxy' }) {
+  try {
+    const fetchOptions = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+    };
+
+    if (method !== 'GET' && method !== 'HEAD' && body) {
+      fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+
+    const response = await fetch(url, fetchOptions);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.error?.message || errorData.message || `API error: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (error) {
+    console.error(`[${errorPrefix}] Error:`, error.message);
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Validate API key presence
+ * @param {Object} req - Express request
+ * @param {Object} res - Express response
+ * @param {string} headerName - Header containing API key
+ * @returns {string|null} API key or null if invalid
+ */
+function validateApiKey(req, res, headerName) {
+  const apiKey = req.headers[headerName.toLowerCase()];
+  if (!apiKey) {
+    res.status(401).json({ error: `API key required in ${headerName} header` });
+    return null;
+  }
+  return apiKey;
+}
 
 // Initialize Redis client for ML caching
 let redisClient = null;
@@ -64,6 +124,21 @@ const allowedOrigins = [
 app.use(cors({
   origin: allowedOrigins,
   credentials: true
+}));
+
+// Security headers with Helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https:", "wss:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Allow embedding for API responses
+  crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
 app.use(express.json());

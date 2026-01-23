@@ -1,7 +1,38 @@
 /**
  * Solana Wallet Utilities
  * Handles wallet generation, storage, and management for Fenrir Trading Bot
+ *
+ * Security: Private keys are encrypted with AES-256-GCM before localStorage storage.
+ * The encryption password is stored only in memory (session) and cleared on page refresh.
  */
+
+import { encrypt, decrypt, isEncryptionSupported } from './encryption.js';
+
+// Session password storage (cleared on page refresh)
+let sessionPassword = null;
+
+/**
+ * Set the session password for wallet encryption
+ * @param {string} password - Password for encryption
+ */
+export function setWalletPassword(password) {
+  sessionPassword = password;
+}
+
+/**
+ * Check if a wallet password is set
+ * @returns {boolean} True if password is set
+ */
+export function hasWalletPassword() {
+  return sessionPassword !== null;
+}
+
+/**
+ * Clear the session password
+ */
+export function clearWalletPassword() {
+  sessionPassword = null;
+}
 
 /**
  * Generate a new Solana wallet (keypair)
@@ -70,20 +101,36 @@ export function isValidPrivateKey(privateKey) {
 }
 
 /**
- * Store wallet in localStorage (encrypted)
- * WARNING: This stores the private key in browser storage. In production,
- * consider using a more secure method like hardware wallets or password encryption.
+ * Store wallet in localStorage with encrypted private key
  *
  * @param {Object} wallet - Wallet object with publicKey and privateKey
  * @param {string} name - Wallet name/label
+ * @param {string} [password] - Optional password (uses session password if not provided)
+ * @returns {Promise<boolean>} Success status
  */
-export function saveWalletToStorage(wallet, name = 'default') {
+export async function saveWalletToStorage(wallet, name = 'default', password = null) {
   try {
+    const pwd = password || sessionPassword;
+
+    if (!pwd) {
+      console.error('No password set for wallet encryption');
+      return false;
+    }
+
+    if (!isEncryptionSupported()) {
+      console.error('Encryption not supported in this browser');
+      return false;
+    }
+
     const wallets = JSON.parse(localStorage.getItem('fenrir_wallets') || '{}');
+
+    // Encrypt the private key before storage
+    const encryptedPrivateKey = await encrypt(wallet.privateKey, pwd);
 
     wallets[name] = {
       publicKey: wallet.publicKey,
-      privateKey: wallet.privateKey, // TODO: Encrypt this
+      encryptedPrivateKey,
+      encrypted: true,
       createdAt: new Date().toISOString(),
       label: name
     };
@@ -97,15 +144,46 @@ export function saveWalletToStorage(wallet, name = 'default') {
 }
 
 /**
- * Load wallet from localStorage
+ * Load wallet from localStorage and decrypt private key
  *
  * @param {string} name - Wallet name/label
- * @returns {Object|null} Wallet object or null if not found
+ * @param {string} [password] - Optional password (uses session password if not provided)
+ * @returns {Promise<Object|null>} Wallet object with decrypted privateKey or null
  */
-export function loadWalletFromStorage(name = 'default') {
+export async function loadWalletFromStorage(name = 'default', password = null) {
   try {
     const wallets = JSON.parse(localStorage.getItem('fenrir_wallets') || '{}');
-    return wallets[name] || null;
+    const wallet = wallets[name];
+
+    if (!wallet) return null;
+
+    // Handle legacy unencrypted wallets
+    if (!wallet.encrypted && wallet.privateKey) {
+      console.warn('Found unencrypted wallet - consider re-saving with encryption');
+      return wallet;
+    }
+
+    const pwd = password || sessionPassword;
+
+    if (!pwd) {
+      // Return wallet info without private key
+      return {
+        publicKey: wallet.publicKey,
+        createdAt: wallet.createdAt,
+        label: wallet.label,
+        needsPassword: true
+      };
+    }
+
+    // Decrypt the private key
+    const privateKey = await decrypt(wallet.encryptedPrivateKey, pwd);
+
+    return {
+      publicKey: wallet.publicKey,
+      privateKey,
+      createdAt: wallet.createdAt,
+      label: wallet.label
+    };
   } catch (error) {
     console.error('Wallet load error:', error);
     return null;
@@ -113,9 +191,9 @@ export function loadWalletFromStorage(name = 'default') {
 }
 
 /**
- * List all stored wallets
+ * List all stored wallets (without private keys)
  *
- * @returns {Array} Array of wallet info (without private keys)
+ * @returns {Array} Array of wallet info
  */
 export function listStoredWallets() {
   try {
@@ -125,7 +203,8 @@ export function listStoredWallets() {
       name,
       publicKey: wallet.publicKey,
       createdAt: wallet.createdAt,
-      label: wallet.label
+      label: wallet.label,
+      encrypted: wallet.encrypted || false
     }));
   } catch (error) {
     console.error('Wallet list error:', error);
@@ -156,9 +235,10 @@ export function deleteWalletFromStorage(name) {
  *
  * @param {string} privateKey - Base58 encoded private key
  * @param {string} name - Wallet name/label
+ * @param {string} [password] - Optional password for encryption
  * @returns {Promise<Object>} Wallet info
  */
-export async function importWallet(privateKey, name = 'imported') {
+export async function importWallet(privateKey, name = 'imported', password = null) {
   try {
     const response = await fetch('http://localhost:3001/api/fenrir/wallet/import', {
       method: 'POST',
@@ -174,8 +254,8 @@ export async function importWallet(privateKey, name = 'imported') {
 
     const wallet = await response.json();
 
-    // Save to storage
-    saveWalletToStorage(wallet, name);
+    // Save to storage with encryption
+    await saveWalletToStorage(wallet, name, password);
 
     return wallet;
   } catch (error) {
@@ -185,14 +265,15 @@ export async function importWallet(privateKey, name = 'imported') {
 }
 
 /**
- * Export wallet mnemonic/seed phrase (if available)
+ * Export wallet private key (requires password)
  *
  * @param {string} name - Wallet name
- * @returns {string|null} Mnemonic phrase or null
+ * @param {string} [password] - Password for decryption
+ * @returns {Promise<string|null>} Private key or null
  */
-export function exportWalletMnemonic(name = 'default') {
-  const wallet = loadWalletFromStorage(name);
-  return wallet?.mnemonic || null;
+export async function exportWalletPrivateKey(name = 'default', password = null) {
+  const wallet = await loadWalletFromStorage(name, password);
+  return wallet?.privateKey || null;
 }
 
 /**
@@ -215,4 +296,43 @@ export function truncatePublicKey(publicKey) {
 export function formatSolAmount(lamports) {
   const sol = lamports / 1e9;
   return sol.toFixed(4);
+}
+
+/**
+ * Migrate legacy unencrypted wallets to encrypted format
+ *
+ * @param {string} password - Password to use for encryption
+ * @returns {Promise<number>} Number of wallets migrated
+ */
+export async function migrateLegacyWallets(password) {
+  try {
+    const wallets = JSON.parse(localStorage.getItem('fenrir_wallets') || '{}');
+    let migrated = 0;
+
+    for (const [name, wallet] of Object.entries(wallets)) {
+      if (!wallet.encrypted && wallet.privateKey) {
+        const encryptedPrivateKey = await encrypt(wallet.privateKey, password);
+
+        wallets[name] = {
+          publicKey: wallet.publicKey,
+          encryptedPrivateKey,
+          encrypted: true,
+          createdAt: wallet.createdAt || new Date().toISOString(),
+          label: wallet.label || name,
+          migratedAt: new Date().toISOString()
+        };
+
+        migrated++;
+      }
+    }
+
+    if (migrated > 0) {
+      localStorage.setItem('fenrir_wallets', JSON.stringify(wallets));
+    }
+
+    return migrated;
+  } catch (error) {
+    console.error('Migration error:', error);
+    return 0;
+  }
 }

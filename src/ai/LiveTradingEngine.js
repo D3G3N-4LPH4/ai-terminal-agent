@@ -32,9 +32,16 @@ export class LiveTradingEngine {
     this.useAIAnalysis = config.useAIAnalysis || false; // AI-powered decisions
     this.useJito = config.useJito || false; // MEV protection
 
-    // Scanning configuration
-    this.scanInterval = config.scanInterval || 5000; // 5 seconds
+    // Scanning configuration with dynamic intervals
+    this.scanInterval = config.scanInterval || 5000; // Base: 5 seconds
+    this.minScanInterval = config.minScanInterval || 3000; // Min: 3 seconds (high activity)
+    this.maxScanInterval = config.maxScanInterval || 30000; // Max: 30 seconds (low activity)
+    this.scanIntervalStep = 2000; // Adjustment step
     this.platforms = config.platforms || ['pump.fun', 'bonk.fun'];
+
+    // Load tracking for dynamic intervals
+    this.recentTokenCounts = []; // Track tokens found in recent scans
+    this.maxRecentScans = 5; // Number of scans to average
 
     // Trading parameters
     this.maxPositions = config.maxPositions || 3;
@@ -174,18 +181,30 @@ export class LiveTradingEngine {
 
   /**
    * Main scanning loop - monitors pump.fun and bonk.fun
+   * Uses dynamic intervals based on market activity
    */
   async scanLoop() {
     while (this.isRunning) {
       try {
         const startTime = Date.now();
+        let totalTokensFound = 0;
 
         for (const platform of this.platforms) {
-          await this.scanPlatform(platform);
+          const count = await this.scanPlatform(platform);
+          totalTokensFound += count || 0;
         }
 
         this.stats.lastScanTime = Date.now();
         this.stats.uptime = Date.now() - this.startTime;
+
+        // Track recent token counts for dynamic interval adjustment
+        this.recentTokenCounts.push(totalTokensFound);
+        if (this.recentTokenCounts.length > this.maxRecentScans) {
+          this.recentTokenCounts.shift();
+        }
+
+        // Adjust scan interval based on activity
+        this.adjustScanInterval();
 
         // Wait for next scan
         const elapsed = Date.now() - startTime;
@@ -201,7 +220,30 @@ export class LiveTradingEngine {
   }
 
   /**
+   * Dynamically adjust scan interval based on market activity
+   * More tokens = faster scanning; fewer tokens = slower scanning
+   */
+  adjustScanInterval() {
+    if (this.recentTokenCounts.length < 2) return;
+
+    const avgTokens = this.recentTokenCounts.reduce((a, b) => a + b, 0) / this.recentTokenCounts.length;
+
+    // High activity (5+ tokens avg) = decrease interval
+    if (avgTokens >= 5 && this.scanInterval > this.minScanInterval) {
+      this.scanInterval = Math.max(this.minScanInterval, this.scanInterval - this.scanIntervalStep);
+      console.log(`📈 High activity detected - scan interval: ${this.scanInterval}ms`);
+    }
+    // Medium activity (1-4 tokens) = keep current interval
+    // Low activity (0 tokens avg) = increase interval
+    else if (avgTokens < 1 && this.scanInterval < this.maxScanInterval) {
+      this.scanInterval = Math.min(this.maxScanInterval, this.scanInterval + this.scanIntervalStep);
+      console.log(`📉 Low activity - scan interval: ${this.scanInterval}ms`);
+    }
+  }
+
+  /**
    * Scan specific platform for new tokens
+   * @returns {number} Number of tokens found
    */
   async scanPlatform(platform) {
     console.log(`🔍 Scanning ${platform}...`);
@@ -221,10 +263,12 @@ export class LiveTradingEngine {
       }
 
       console.log(`✓ ${platform}: Found ${tokens.length} tokens`);
+      return tokens.length;
 
     } catch (error) {
       console.error(`Error scanning ${platform}:`, error);
       this.onError({ platform, error });
+      return 0;
     }
   }
 
