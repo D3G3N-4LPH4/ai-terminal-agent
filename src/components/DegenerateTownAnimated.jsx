@@ -143,7 +143,7 @@ class AnimatedAgent {
       style: {
         fontFamily: 'monospace',
         fontSize: fallback.size * 0.8,
-        fill: 0xffffff,
+        fill: '#ffffff',
         fontWeight: 'bold',
       },
     });
@@ -160,7 +160,7 @@ class AnimatedAgent {
       style: {
         fontFamily: 'monospace',
         fontSize: 10,
-        fill: 0xffffff,
+        fill: '#ffffff',
       },
     });
     this.nameText.anchor.set(0.5);
@@ -173,7 +173,7 @@ class AnimatedAgent {
       style: {
         fontFamily: 'monospace',
         fontSize: 9,
-        fill: 0x00ff00,
+        fill: '#00ff00',
       },
     });
     this.pnlText.anchor.set(0.5);
@@ -218,7 +218,7 @@ class AnimatedAgent {
   updatePnL(pnl) {
     const value = parseFloat(pnl);
     this.pnlText.text = `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
-    this.pnlText.style.fill = value >= 0 ? 0x00ff00 : 0xff0000;
+    this.pnlText.style.fill = value >= 0 ? '#00ff00' : '#ff0000';
   }
 
   showAction(action) {
@@ -589,9 +589,10 @@ const DegenerateTownAnimated = ({ compact = false, onClose }) => {
       const angle = (i / 8) * Math.PI * 2 - Math.PI / 2;
       const runeText = new PIXI.Text({
         text: RUNES[i],
-        style: { fontFamily: 'monospace', fontSize: 14, fill: 0xff000066 },
+        style: { fontFamily: 'monospace', fontSize: 14, fill: '#ff0000' },
       });
       runeText.anchor.set(0.5);
+      runeText.alpha = 0.4;
       runeText.position.set(
         arenaX + Math.cos(angle) * 72,
         arenaY + Math.sin(angle) * 72
@@ -623,7 +624,7 @@ const DegenerateTownAnimated = ({ compact = false, onClose }) => {
         style: {
           fontFamily: 'monospace',
           fontSize: Math.random() * 12 + 10,
-          fill: 0x00ff41,
+          fill: '#00ff41',
         },
       });
       rune.alpha = Math.random() * 0.25 + 0.1;

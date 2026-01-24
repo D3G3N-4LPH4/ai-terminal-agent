@@ -301,9 +301,10 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
         style: {
           fontFamily: 'monospace',
           fontSize: 12,
-          fill: 0xff000066,
+          fill: '#ff0000',
         },
       });
+      runeText.alpha = 0.4;
       runeText.anchor.set(0.5);
       runeText.position.set(x, y);
       container.addChild(runeText);
@@ -322,8 +323,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
         style: {
           fontFamily: 'monospace',
           fontSize: Math.random() * 10 + 10,
-          fill: 0x00ff41,
-          alpha: 0.2,
+          fill: '#00ff41',
         },
       });
 
@@ -331,7 +331,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
         Math.random() * width,
         Math.random() * height * 0.3
       );
-      rune.alpha = Math.random() * 0.3 + 0.1;
+      rune.alpha = Math.random() * 0.2 + 0.1;
       rune._speed = Math.random() * 0.3 + 0.1;
       rune._originalX = rune.position.x;
 
@@ -365,7 +365,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
         style: {
           fontFamily: 'monospace',
           fontSize: 14,
-          fill: 0xffffff,
+          fill: '#ffffff',
           fontWeight: 'bold',
         },
       });
@@ -379,7 +379,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
         style: {
           fontFamily: 'monospace',
           fontSize: compact ? 8 : 10,
-          fill: 0xffffff,
+          fill: '#ffffff',
         },
       });
       name.anchor.set(0.5);
@@ -392,7 +392,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
         style: {
           fontFamily: 'monospace',
           fontSize: compact ? 7 : 9,
-          fill: 0x00ff00,
+          fill: '#00ff00',
         },
       });
       pnl.anchor.set(0.5);
@@ -449,7 +449,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
       style: {
         fontFamily: 'monospace',
         fontSize: 11,
-        fill: 0xffd700,
+        fill: '#ffd700',
         fontWeight: 'bold',
       },
     });
@@ -469,7 +469,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
       style: {
         fontFamily: 'monospace',
         fontSize: 11,
-        fill: 0xffd700,
+        fill: '#ffd700',
         fontWeight: 'bold',
       },
     });
@@ -523,7 +523,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
       // Update PnL display
       const pnlValue = parseFloat(trade.pnl);
       agentSprite.pnl.text = `${pnlValue >= 0 ? '+' : ''}${pnlValue.toFixed(2)}`;
-      agentSprite.pnl.style.fill = pnlValue >= 0 ? 0x00ff00 : 0xff0000;
+      agentSprite.pnl.style.fill = pnlValue >= 0 ? '#00ff00' : '#ff0000';
 
       // Update action indicator
       const actionEmoji = {
@@ -606,7 +606,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
           if (agentSprite) {
             const pnl = parseFloat(agentData.totalPnL);
             agentSprite.pnl.text = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`;
-            agentSprite.pnl.style.fill = pnl >= 0 ? 0x00ff00 : 0xff0000;
+            agentSprite.pnl.style.fill = pnl >= 0 ? '#00ff00' : '#ff0000';
           }
         });
       }
