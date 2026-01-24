@@ -82,6 +82,7 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
   const runesRef = useRef([]);
   const [stats, setStats] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [initError, setInitError] = useState(null);
 
   // Initialize PixiJS application
   useEffect(() => {
@@ -94,17 +95,25 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
     const app = new PIXI.Application();
 
     const initPixi = async () => {
-      await app.init({
-        width,
-        height,
-        backgroundColor: THEME.background,
-        antialias: true,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true,
-      });
+      try {
+        await app.init({
+          width,
+          height,
+          backgroundColor: THEME.background,
+          antialias: true,
+          resolution: window.devicePixelRatio || 1,
+          autoDensity: true,
+        });
 
-      containerRef.current.appendChild(app.canvas);
-      appRef.current = app;
+        if (!containerRef.current) return; // Check again after async
+        containerRef.current.appendChild(app.canvas);
+        appRef.current = app;
+        setInitError(null);
+      } catch (error) {
+        console.error('[DegenerateTownPixi] Init error:', error);
+        setInitError(error.message || 'Failed to initialize PixiJS');
+        return;
+      }
 
       // Create layers
       const backgroundLayer = new PIXI.Container();
@@ -145,7 +154,10 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
       });
     };
 
-    initPixi();
+    initPixi().catch(error => {
+      console.error('[DegenerateTownPixi] Async init error:', error);
+      setInitError(error.message || 'Failed to initialize');
+    });
 
     return () => {
       if (appRef.current) {
@@ -627,6 +639,53 @@ const DegenerateTownPixi = ({ compact = false, onClose }) => {
   const handleReset = useCallback(() => {
     degenerateTownService.resetLearning();
   }, []);
+
+  // Render error fallback if initialization failed
+  if (initError) {
+    return (
+      <div className="degenerate-town-pixi" style={{
+        position: 'relative',
+        width: compact ? '450px' : '900px',
+        height: compact ? '250px' : '500px',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        border: '2px solid #ff4444',
+        background: '#0a0e27',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'monospace',
+        color: '#ff4444',
+        padding: '20px',
+      }}>
+        <div style={{ fontSize: '24px', marginBottom: '10px' }}>⚠️</div>
+        <div style={{ marginBottom: '10px', fontWeight: 'bold' }}>PixiJS Failed to Initialize</div>
+        <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '15px' }}>
+          {initError}
+        </div>
+        <div style={{ fontSize: '11px', color: '#666' }}>
+          Try: degen view (for Canvas fallback)
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            style={{
+              marginTop: '15px',
+              background: '#ff4444',
+              border: 'none',
+              color: '#fff',
+              padding: '8px 16px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Close
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="degenerate-town-pixi" style={{

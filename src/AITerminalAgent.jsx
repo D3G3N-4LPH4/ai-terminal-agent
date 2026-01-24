@@ -6878,42 +6878,87 @@ ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NO
                 }
 
                 case "view": {
+                  const isOpening = !showDegenView;
                   setShowDegenView(prev => !prev);
-                  setShowDegenPixi(false); // Close PixiJS view if open
-                  addOutput({
-                    type: "info",
-                    content: showDegenView
-                      ? "🎮 Closing Degenerate Town visual simulation..."
-                      : "🎮 Opening Degenerate Town Canvas visualization...\n\nThe Norse gods trading floor is now visible!"
-                  });
-                  showToast(showDegenView ? "Visual closed" : "Canvas view opened", "success");
+                  setShowDegenPixi(false);
+                  setShowDegenAnimated(false);
+
+                  // Auto-start simulation if opening and not running
+                  if (isOpening && !degenerateTownService.isRunning) {
+                    await degenerateTownService.start();
+                    addOutput({
+                      type: "info",
+                      content: "🎮 Opening Degenerate Town Canvas visualization...\n\n⚡ Simulation auto-started!\nThe Norse gods trading floor is now visible!"
+                    });
+                  } else {
+                    addOutput({
+                      type: "info",
+                      content: isOpening
+                        ? "🎮 Opening Degenerate Town Canvas visualization...\n\nThe Norse gods trading floor is now visible!"
+                        : "🎮 Closing Degenerate Town visual simulation..."
+                    });
+                  }
+                  showToast(isOpening ? "Canvas view opened" : "Visual closed", "success");
                   break;
                 }
 
                 case "pixi": {
+                  const isOpening = !showDegenPixi;
                   setShowDegenPixi(prev => !prev);
                   setShowDegenView(false);
                   setShowDegenAnimated(false);
-                  addOutput({
-                    type: "info",
-                    content: showDegenPixi
-                      ? "🎮 Closing PixiJS simulation..."
-                      : "🎮 Opening Degenerate Town PixiJS visualization...\n\n⚡ Enhanced graphics with particle effects!"
-                  });
-                  showToast(showDegenPixi ? "PixiJS closed" : "PixiJS view opened", "success");
+
+                  // Auto-start simulation if opening and not running
+                  if (isOpening && !degenerateTownService.isRunning) {
+                    await degenerateTownService.start();
+                    addOutput({
+                      type: "info",
+                      content: "🎮 Opening Degenerate Town PixiJS visualization...\n\n⚡ Simulation auto-started!\nEnhanced graphics with particle effects!"
+                    });
+                  } else {
+                    addOutput({
+                      type: "info",
+                      content: isOpening
+                        ? "🎮 Opening Degenerate Town PixiJS visualization...\n\n⚡ Enhanced graphics with particle effects!"
+                        : "🎮 Closing PixiJS simulation..."
+                    });
+                  }
+                  showToast(isOpening ? "PixiJS view opened" : "PixiJS closed", "success");
                   break;
                 }
 
                 case "animated":
                 case "full": {
+                  const isOpening = !showDegenAnimated;
                   setShowDegenAnimated(prev => !prev);
                   setShowDegenView(false);
                   setShowDegenPixi(false);
-                  addOutput({
-                    type: "info",
-                    content: showDegenAnimated
-                      ? "🎮 Closing animated simulation..."
-                      : `🎮 Opening Degenerate Town FULL visualization...
+
+                  // Auto-start simulation if opening and not running
+                  if (isOpening && !degenerateTownService.isRunning) {
+                    await degenerateTownService.start();
+                    addOutput({
+                      type: "info",
+                      content: `🎮 Opening Degenerate Town FULL visualization...
+
+⚡ Simulation auto-started!
+
+FEATURES:
+• CraftPix spritesheet animation support
+• Character walk cycles and actions
+• Particle systems for trading effects
+• Dynamic lighting and glow
+• Screen shake and flash effects
+• Parallax backgrounds
+
+💡 Add custom sprites to public/assets/sprites/
+   Run: node scripts/setupCraftPixAssets.js for setup guide`
+                    });
+                  } else {
+                    addOutput({
+                      type: "info",
+                      content: isOpening
+                        ? `🎮 Opening Degenerate Town FULL visualization...
 
 ⚡ FEATURES:
 • CraftPix spritesheet animation support
@@ -6925,8 +6970,10 @@ ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NO
 
 💡 Add custom sprites to public/assets/sprites/
    Run: node scripts/setupCraftPixAssets.js for setup guide`
-                  });
-                  showToast(showDegenAnimated ? "Animated closed" : "Full animation opened", "success");
+                        : "🎮 Closing animated simulation..."
+                    });
+                  }
+                  showToast(isOpening ? "Full animation opened" : "Animated closed", "success");
                   break;
                 }
 
