@@ -1296,8 +1296,6 @@ Category requested: ${toolArgs.category || 'none'}`,
     showToast,
     showDegenTown,
     setShowDegenTown,
-    degenerateTownService,
-    NORSE_AGENTS,
   });
 
   // System commands: help, welcome, quickhelp, apikeys, status, clear, models
@@ -1322,11 +1320,18 @@ Category requested: ${toolArgs.category || 'none'}`,
     sentimentAnalyzer: sentimentAnalyzer.current,
     anomalyDetector: anomalyDetector.current,
     patternRecognizer: patternRecognizer.current,
+    multiTimeframeAnalyzer: multiTimeframeAnalyzer.current,
+    multiSourceSentiment: multiSourceSentiment.current,
+    mlCacheHelper: mlCacheHelper.current,
     coinMarketCapAPI: coinMarketCapAPI.current,
+    coinGeckoAPI: coinGeckoAPI.current,
+    santimentAPI: santimentAPI.current,
+    API_CONFIG,
+    COIN_SYMBOL_MAP,
     setShowDashboard,
     setDashboardSymbol,
     setDashboardCoinId,
-    COIN_SYMBOL_MAP,
+    getCMCHistoricalData,
   });
 
   // AI commands: talk, ask, analyze, forget
@@ -1335,10 +1340,16 @@ Category requested: ${toolArgs.category || 'none'}`,
     showToast,
     openRouterAPI: openRouterAPI.current,
     aiFallback: aiFallback.current,
-    currentAIModel,
     coinMarketCapAPI: coinMarketCapAPI.current,
-    executeTool,
+    santimentAPI: santimentAPI.current,
+    API_CONFIG,
+    COIN_SYMBOL_MAP,
     AVAILABLE_TOOLS,
+    executeTool,
+    conversationHistory,
+    setConversationHistory,
+    conversationMetadata,
+    setConversationMetadata,
   });
 
   // CMC commands: cmc price/top/trending/gainers/losers/convert/info/global
