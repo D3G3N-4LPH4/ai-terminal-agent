@@ -10,6 +10,7 @@ const OutputItem = React.memo(({ item, theme }) => {
     help: theme.text,
     user: theme.text,
     ai: "text-green-400",
+    welcome: "text-cyan-300", // Special styling for welcome/onboarding messages
   };
 
   return (

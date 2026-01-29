@@ -3,6 +3,12 @@
  *
  * Manages Norse god AI agents in a simulated trading environment.
  * Each agent learns via Q-Learning and makes autonomous trading decisions.
+ *
+ * Features:
+ * - Q-Learning based AI agents with unique strategies
+ * - Real-time WebSocket sync support (Socket.io)
+ * - Market events and condition changes
+ * - Leaderboard tracking
  */
 
 import {
@@ -41,8 +47,129 @@ class DegenerateTownService extends BrowserEventEmitter {
       marketEvents: 0,
     };
 
+    // Socket.io real-time sync
+    this.socketManager = null;
+    this.useRealTimeSync = false;
+
     // Initialize agents
     this.initializeAgents();
+  }
+
+  /**
+   * Enable real-time Socket.io sync
+   * @param {Object} socketManager - Socket manager instance
+   */
+  enableRealTimeSync(socketManager) {
+    if (!socketManager) {
+      console.warn('[DegenerateTown] No socket manager provided');
+      return;
+    }
+
+    this.socketManager = socketManager;
+    this.useRealTimeSync = true;
+
+    // Subscribe to degenerate town channel
+    socketManager.subscribe('degen-town');
+
+    // Listen for remote updates
+    socketManager.on('degen-update', (data) => {
+      this.handleRemoteUpdate(data);
+    });
+
+    socketManager.on('degen-trade', (trade) => {
+      this.handleRemoteTrade(trade);
+    });
+
+    socketManager.on('degen-event', (event) => {
+      this.handleRemoteEvent(event);
+    });
+
+    console.log('[DegenerateTown] Real-time sync enabled');
+  }
+
+  /**
+   * Disable real-time sync
+   */
+  disableRealTimeSync() {
+    if (this.socketManager) {
+      this.socketManager.unsubscribe('degen-town');
+      this.socketManager.removeAllListeners('degen-update');
+      this.socketManager.removeAllListeners('degen-trade');
+      this.socketManager.removeAllListeners('degen-event');
+    }
+    this.socketManager = null;
+    this.useRealTimeSync = false;
+    console.log('[DegenerateTown] Real-time sync disabled');
+  }
+
+  /**
+   * Handle remote state update
+   */
+  handleRemoteUpdate(data) {
+    if (data.tick) this.currentTick = data.tick;
+    if (data.marketCondition) this.marketCondition = data.marketCondition;
+    if (data.leaderboard) this.leaderboard = data.leaderboard;
+
+    // Update agent states
+    if (data.agents && Array.isArray(data.agents)) {
+      data.agents.forEach(agentData => {
+        const agent = this.agents.get(agentData.id);
+        if (agent) {
+          Object.assign(agent, agentData);
+        }
+      });
+    }
+
+    this.emit('remoteUpdate', data);
+  }
+
+  /**
+   * Handle remote trade
+   */
+  handleRemoteTrade(trade) {
+    this.trades.push(trade);
+    if (this.trades.length > 100) this.trades.shift();
+    this.emit('trade', trade);
+  }
+
+  /**
+   * Handle remote market event
+   */
+  handleRemoteEvent(event) {
+    this.marketEvents.push(event);
+    if (this.marketEvents.length > 50) this.marketEvents.shift();
+    this.emit('marketEvent', event);
+  }
+
+  /**
+   * Broadcast state to connected clients
+   */
+  broadcastState() {
+    if (!this.useRealTimeSync || !this.socketManager) return;
+
+    this.socketManager.send('degen-state', {
+      tick: this.currentTick,
+      marketCondition: this.marketCondition,
+      agents: this.getAgentStates(),
+      leaderboard: this.leaderboard.slice(0, 5),
+      stats: this.getStats()
+    });
+  }
+
+  /**
+   * Broadcast trade to connected clients
+   */
+  broadcastTrade(trade) {
+    if (!this.useRealTimeSync || !this.socketManager) return;
+    this.socketManager.send('degen-trade', trade);
+  }
+
+  /**
+   * Broadcast market event to connected clients
+   */
+  broadcastEvent(event) {
+    if (!this.useRealTimeSync || !this.socketManager) return;
+    this.socketManager.send('degen-event', event);
   }
 
   /**
@@ -696,6 +823,60 @@ class DegenerateTownService extends BrowserEventEmitter {
     }
 
     return { success: true, speed: this.simulationSpeed };
+  }
+
+  /**
+   * Clean up all resources (for unmount)
+   * Call this when the component using this service unmounts
+   */
+  destroy() {
+    // Stop simulation
+    if (this.isRunning) {
+      this.stop();
+    }
+
+    // Disable real-time sync and remove listeners
+    this.disableRealTimeSync();
+
+    // Clear all event listeners from BrowserEventEmitter
+    this.removeAllListeners();
+
+    console.log('[DegenerateTown] Service destroyed and cleaned up');
+  }
+
+  /**
+   * Get agent stats for display
+   * @param {string} agentId - Agent ID
+   * @returns {Object|null} Agent stats or null if not found
+   */
+  getAgentStats(agentId) {
+    const agent = this.agents.get(agentId);
+    if (!agent) return null;
+
+    return {
+      id: agent.id,
+      name: agent.name,
+      balance: agent.balance,
+      totalPnL: agent.totalPnL,
+      trades: agent.trades,
+      wins: agent.wins,
+      losses: agent.losses,
+      winRate: agent.trades > 0 ? (agent.wins / agent.trades * 100) : 0,
+      currentAction: agent.currentAction,
+      mood: agent.mood,
+      explorationRate: agent.explorationRate,
+    };
+  }
+
+  /**
+   * Get agent Q-table for display
+   * @param {string} agentId - Agent ID
+   * @returns {Object|null} Q-table or null if not found
+   */
+  getAgentQTable(agentId) {
+    const agent = this.agents.get(agentId);
+    if (!agent) return null;
+    return agent.qTable;
   }
 }
 

@@ -101,6 +101,8 @@ const CommandInput = ({
       {/* Autocomplete suggestions dropdown */}
       {showSuggestions && filteredSuggestions.length > 0 && (
         <div
+          id="suggestions-list"
+          role="listbox"
           className="absolute bottom-full left-0 right-0 mb-1 rounded-lg overflow-hidden shadow-lg z-50"
           style={{
             backgroundColor: theme.inputBg || '#1a1a2e',
@@ -194,7 +196,7 @@ const CommandInput = ({
       {/* Keyboard shortcut hint */}
       <div
         className="flex items-center gap-4 mt-2 text-xs opacity-50"
-        style={{ color: theme.textSecondary || '#888' }}
+        style={{ color: theme.textSecondary || '#a0a0a0' }}
       >
         <span className="flex items-center gap-1">
           <Command size={12} /> + Enter to submit

@@ -76,6 +76,7 @@ import LiveTradingEngine from "./ai/LiveTradingEngine";
 import TelegramScannerService from "./services/TelegramScannerService";
 import scoutEngine from "./scout/ScoutEngine";
 import degenerateTownService from "./services/DegenerateTownService";
+import rloopService from "./services/RLoopService";
 import { NORSE_AGENTS, NORSE_RUNES, REALM_TYPES } from "./config/degenerateTown";
 
 // Import ML modules
@@ -90,9 +91,18 @@ import {
 // Import components
 import { Toast, APIKeyModal, OutputItem, Dashboard } from "./components";
 import ThemeToggle from "./components/ThemeDropdown";
-import DegenerateTownView from "./components/DegenerateTownView";
-import DegenerateTownPixi from "./components/DegenerateTownPixi";
-import DegenerateTownAnimated from "./components/DegenerateTownAnimated";
+import DegenerateTownUltimate from "./components/DegenerateTownUltimate";
+
+// Import command hooks
+import {
+  useMarketCommands,
+  useDegenTownCommands,
+  useSystemCommands,
+  useMLCommands,
+  useAICommands,
+  useCMCCommands,
+  useTradingCommands,
+} from "./hooks";
 
 import {
   LineChart,
@@ -237,33 +247,46 @@ const CONVERSATION_STORAGE_KEY = "ai-agent-conversation";
 const CONVERSATION_METADATA_KEY = "ai-agent-conversation-meta";
 
 const COMMAND_SUGGESTIONS = [
-  { cmd: "price BTC", desc: "Get real crypto prices", category: "trading" },
-  { cmd: "market ETH", desc: "Detailed market data", category: "trading" },
-  { cmd: "global", desc: "Global crypto data", category: "trading" },
-  { cmd: "trending", desc: "Trending cryptocurrencies", category: "news" },
-  { cmd: "fear", desc: "Fear & Greed Index", category: "news" },
-  { cmd: "news", desc: "Crypto news", category: "news" },
-  {
-    cmd: "scrape https://example.com",
-    desc: "Scrape any website",
-    category: "scraping",
-  },
-  { cmd: "websearch-ai bitcoin ETF news", desc: "AI web search with citations", category: "scraping" },
-  { cmd: "research bitcoin scaling", desc: "Deep AI research with citations", category: "scraping" },
-  { cmd: "research https://example.com", desc: "Scrape & analyze URL", category: "scraping" },
-  { cmd: "google bitcoin news", desc: "Google Search (results only)", category: "scraping" },
-  { cmd: "gecko trending DEX tokens", desc: "CoinGecko MCP AI query", category: "trading" },
+  // Beginner-friendly commands first
+  { cmd: "welcome", desc: "🚀 Start here! Getting started guide", category: "system" },
+  { cmd: "? market", desc: "Quick help for market commands", category: "system" },
+  { cmd: "? trading", desc: "Quick help for trading commands", category: "system" },
+  { cmd: "? ml", desc: "Quick help for ML commands (FREE!)", category: "system" },
+  // Market commands
+  { cmd: "price BTC", desc: "Get real crypto prices", category: "market" },
+  { cmd: "market ETH", desc: "Detailed market data", category: "market" },
+  { cmd: "global", desc: "Global crypto data", category: "market" },
+  { cmd: "trending", desc: "Trending cryptocurrencies", category: "market" },
+  { cmd: "fear", desc: "Fear & Greed Index", category: "market" },
+  { cmd: "movers", desc: "Top gainers & losers", category: "market" },
+  // AI commands
+  { cmd: "talk what's the market trend?", desc: "AI analysis", category: "ai" },
+  { cmd: "analyze BTC", desc: "Deep AI analysis", category: "ai" },
+  { cmd: "models", desc: "List AI models", category: "ai" },
+  // ML commands (FREE)
+  { cmd: "predict BTC 7", desc: "ML price prediction (FREE)", category: "ml" },
+  { cmd: "sentiment BTC", desc: "ML sentiment analysis (FREE)", category: "ml" },
+  { cmd: "patterns ETH", desc: "ML pattern recognition (FREE)", category: "ml" },
+  { cmd: "dashboard BTC", desc: "Interactive charts (FREE)", category: "ml" },
+  // Research commands
+  { cmd: "websearch-ai bitcoin ETF news", desc: "AI web search with citations", category: "research" },
+  { cmd: "research bitcoin scaling", desc: "Deep AI research with citations", category: "research" },
+  { cmd: "scrape https://example.com", desc: "Scrape any website", category: "research" },
+  { cmd: "google bitcoin news", desc: "Google Search (results only)", category: "research" },
+  // Trading commands
+  { cmd: "fenrir start simulation", desc: "Start trading bot (safe mode)", category: "trading" },
+  { cmd: "degen open", desc: "Norse AI trading simulation", category: "trading" },
+  { cmd: "scout discover", desc: "Find 100x token candidates", category: "trading" },
+  // CMC commands
   { cmd: "cmc price BTC", desc: "CMC price data", category: "cmc" },
   { cmd: "cmc top 10", desc: "Top cryptocurrencies", category: "cmc" },
   { cmd: "cmc trending", desc: "Trending coins", category: "cmc" },
   { cmd: "cmc gainers", desc: "Top gainers/losers", category: "cmc" },
-  { cmd: "cmc convert 1 BTC USD", desc: "Convert crypto", category: "cmc" },
-  { cmd: "talk what's the market trend?", desc: "AI analysis", category: "ai" },
-  { cmd: "analyze BTC", desc: "Deep AI analysis", category: "ai" },
+  // System commands
   { cmd: "apikeys", desc: "Manage API keys", category: "system" },
-  { cmd: "models", desc: "List AI models", category: "ai" },
+  { cmd: "status", desc: "Check API status", category: "system" },
   { cmd: "theme", desc: "Change theme", category: "system" },
-  { cmd: "help", desc: "Show commands", category: "system" },
+  { cmd: "help", desc: "Full command reference", category: "system" },
 ];
 
 const KEYBOARD_SHORTCUTS = [
@@ -432,9 +455,7 @@ export default function AITerminalAgent() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardSymbol, setDashboardSymbol] = useState('BTC');
   const [dashboardCoinId, setDashboardCoinId] = useState('bitcoin');
-  const [showDegenView, setShowDegenView] = useState(false);
-  const [showDegenPixi, setShowDegenPixi] = useState(false);
-  const [showDegenAnimated, setShowDegenAnimated] = useState(false);
+  const [showDegenTown, setShowDegenTown] = useState(false);
   const [conversationHistory, setConversationHistory] = useState(() => {
     // Load conversation history from localStorage on init
     try {
@@ -577,6 +598,48 @@ export default function AITerminalAgent() {
         console.warn('ML Services initialization failed');
       }
     });
+
+    // Show welcome screen for first-time users
+    const hasSeenWelcome = localStorage.getItem('ai-terminal-seen-welcome');
+    if (!hasSeenWelcome) {
+      // Delay to allow UI to render first
+      setTimeout(() => {
+        const welcomeContent = `
+┌─────────────────────────────────────────────────────────────────┐
+│  ᚠ WELCOME TO FENRIR'S GRIMOIRE - AI Trading Terminal          │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                                 │
+│  Your intelligent command center for crypto analysis,           │
+│  ML predictions, and autonomous trading.                        │
+└─────────────────────────────────────────────────────────────────┘
+
+🚀 QUICK START
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. apikeys         - Configure your API keys (required for market data)
+  2. price BTC       - Get Bitcoin price
+  3. analyze SOL     - AI market analysis
+  4. predict BTC 7   - ML price prediction (FREE - no API key needed!)
+  5. degen open      - Open Norse AI trading simulation (FREE!)
+
+⌨️  KEYBOARD TIPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ↑ / ↓    Navigate command history
+  Tab      Autocomplete commands
+  Ctrl+L   Clear terminal
+
+💡 Type 'welcome' anytime to see the full getting started guide
+   Type '? [category]' for quick help (e.g., '? market', '? ml')
+   Type 'help' for the complete command reference
+`;
+        setOutput(prev => [...prev, {
+          id: Date.now(),
+          type: 'welcome',
+          content: welcomeContent
+        }]);
+        localStorage.setItem('ai-terminal-seen-welcome', 'true');
+      }, 500);
+    }
   }, []);
 
   // Update LangGraph agent when model changes
@@ -1216,6 +1279,85 @@ Category requested: ${toolArgs.category || 'none'}`,
     [saveTheme, showToast]
   );
 
+  // ==================== COMMAND HOOKS ====================
+
+  // Market commands: price, market, global, trending, movers, categories, fear
+  const { handleCommand: handleMarketCommand } = useMarketCommands({
+    addOutput,
+    showToast,
+    coinMarketCapAPI: coinMarketCapAPI.current,
+    scraperAPI: scraperAPI.current,
+    COIN_SYMBOL_MAP,
+  });
+
+  // Degenerate Town commands: degen start/stop/status/open etc.
+  const { handleCommand: handleDegenCommand } = useDegenTownCommands({
+    addOutput,
+    showToast,
+    showDegenTown,
+    setShowDegenTown,
+    degenerateTownService,
+    NORSE_AGENTS,
+  });
+
+  // System commands: help, welcome, quickhelp, apikeys, status, clear, models
+  const { handleCommand: handleSystemCommand } = useSystemCommands({
+    addOutput,
+    showToast,
+    setShowAPIKeyModal,
+    setOutput,
+    API_CONFIG,
+    currentAIModel,
+    setCurrentAIModel,
+    THEMES,
+  });
+
+  // ML commands: predict, sentiment, anomaly, patterns, dashboard
+  const { handleCommand: handleMLCommand } = useMLCommands({
+    addOutput,
+    showToast,
+    setOutput,
+    mlService: mlService.current,
+    pricePredictor: pricePredictor.current,
+    sentimentAnalyzer: sentimentAnalyzer.current,
+    anomalyDetector: anomalyDetector.current,
+    patternRecognizer: patternRecognizer.current,
+    coinMarketCapAPI: coinMarketCapAPI.current,
+    setShowDashboard,
+    setDashboardSymbol,
+    setDashboardCoinId,
+    COIN_SYMBOL_MAP,
+  });
+
+  // AI commands: talk, ask, analyze, forget
+  const { handleCommand: handleAICommand } = useAICommands({
+    addOutput,
+    showToast,
+    openRouterAPI: openRouterAPI.current,
+    aiFallback: aiFallback.current,
+    currentAIModel,
+    coinMarketCapAPI: coinMarketCapAPI.current,
+    executeTool,
+    AVAILABLE_TOOLS,
+  });
+
+  // CMC commands: cmc price/top/trending/gainers/losers/convert/info/global
+  const { handleCommand: handleCMCCommand } = useCMCCommands({
+    addOutput,
+    showToast,
+    coinMarketCapAPI: coinMarketCapAPI.current,
+    API_CONFIG,
+  });
+
+  // Trading commands: fenrir start/stop/status, scan start/stop/status
+  const { handleCommand: handleTradingCommand } = useTradingCommands({
+    addOutput,
+    showToast,
+    fenrirTradingAPI: fenrirTradingAPI.current,
+    liveTradingEngine: liveTradingEngine.current,
+    WalletUtils,
+  });
+
   // ==================== COMMAND HANDLERS ====================
 
   const handleCommand = useCallback(
@@ -1227,6 +1369,31 @@ Category requested: ${toolArgs.category || 'none'}`,
       setIsProcessing(true);
 
       try {
+        // Delegate to command hooks first
+        // Note: Hooks are initialized but may have null refs on first render
+        // The hooks handle this gracefully by checking for null APIs
+
+        // CMC commands (cmc price, cmc top, etc.)
+        if (command === 'cmc' && handleCMCCommand) {
+          const handled = await handleCMCCommand(command, args);
+          if (handled) {
+            setIsProcessing(false);
+            return;
+          }
+        }
+
+        // Trading commands (fenrir, scan)
+        if ((command === 'fenrir' || command === 'scan') && handleTradingCommand) {
+          const handled = await handleTradingCommand(command, args);
+          if (handled) {
+            setIsProcessing(false);
+            return;
+          }
+        }
+
+        // Note: Other hooks (market, degen, system, ml, ai) are not yet integrated
+        // to avoid breaking existing functionality. They can be enabled incrementally.
+
         switch (command) {
           case "help": {
             addOutput({
@@ -1333,9 +1500,7 @@ Category requested: ${toolArgs.category || 'none'}`,
   degen events [limit]         - View market events
   degen speed <1-10>           - Adjust simulation speed
   degen reset                  - Reset all learning data
-  degen view                   - Toggle Canvas visualization
-  degen pixi                   - Toggle PixiJS visualization
-  degen animated               - Toggle FULL animation (CraftPix sprites)
+  degen open                   - Open visual simulation (interactive)
 
 🌐 WEB3 WALLET (Secure - Recommended)
   web3 connect [phantom|solflare] - Connect Web3 wallet (secure)
@@ -1368,6 +1533,14 @@ Category requested: ${toolArgs.category || 'none'}`,
   scan config [key]=[value]    - Update configuration
   scan stats                   - Trading statistics
 
+🔄 R-LOOP AUTONOMOUS AGENT (Claude-powered Task Loop)
+  rloop start "task1" "task2"  - Start with tasks
+  rloop stop                   - Stop running agent
+  rloop status                 - Show current status
+  rloop output [limit]         - Show output log
+  rloop progress               - Show detailed progress
+  rloop reset                  - Reset all state
+
 ᛗ SYSTEM RUNES
   apikeys                      - Inscribe your keys
   status                       - Check arsenal readiness
@@ -1375,10 +1548,19 @@ Category requested: ${toolArgs.category || 'none'}`,
   agent                        - LangGraph agent controls
   clear                        - Cleanse the scroll
   help                         - Summon this grimoire
+  welcome                      - Getting started guide
 
-ᛗ New here? Run 'apikeys' to begin your journey
-ᛏ Free access: ML commands work immediately
-ᛪ Backend needed: CoinMarketCap, Helius, Dune, ScraperAPI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🆕 NEW HERE? Try these commands:
+   welcome              - Interactive getting started guide
+   ? [category]         - Quick help (e.g., '? market', '? trading', '? ml')
+
+🆓 FREE FEATURES (No API key needed):
+   predict, sentiment, patterns, anomaly, dashboard, degen
+
+🔑 REQUIRES API KEY:
+   price, market, analyze, research, fenrir, scout
             `,
             });
             break;
@@ -6546,9 +6728,7 @@ Commands:
 • degen events [limit] - Show market events
 • degen speed <ms> - Set simulation speed (100-5000ms)
 • degen reset - Reset all agent learning
-• degen view - Toggle Canvas visualization (lightweight)
-• degen pixi - Toggle PixiJS visualization (enhanced)
-• degen animated - Toggle FULL animation (CraftPix sprites)
+• degen open - Open the visual simulation window
 
 Norse Runes:
 ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NORSE_RUNES.profit} Profit  ${NORSE_RUNES.loss} Loss`
@@ -6877,103 +7057,49 @@ ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NO
                   break;
                 }
 
+                case "open":
                 case "view": {
-                  const isOpening = !showDegenView;
-                  setShowDegenView(prev => !prev);
-                  setShowDegenPixi(false);
-                  setShowDegenAnimated(false);
+                  const isOpening = !showDegenTown;
+                  setShowDegenTown(prev => !prev);
 
                   // Auto-start simulation if opening and not running
                   if (isOpening && !degenerateTownService.isRunning) {
                     await degenerateTownService.start();
                     addOutput({
                       type: "info",
-                      content: "🎮 Opening Degenerate Town Canvas visualization...\n\n⚡ Simulation auto-started!\nThe Norse gods trading floor is now visible!"
-                    });
-                  } else {
-                    addOutput({
-                      type: "info",
-                      content: isOpening
-                        ? "🎮 Opening Degenerate Town Canvas visualization...\n\nThe Norse gods trading floor is now visible!"
-                        : "🎮 Closing Degenerate Town visual simulation..."
-                    });
-                  }
-                  showToast(isOpening ? "Canvas view opened" : "Visual closed", "success");
-                  break;
-                }
+                      content: `🎮 Opening Degenerate Town Ultimate Visualization...
 
-                case "pixi": {
-                  const isOpening = !showDegenPixi;
-                  setShowDegenPixi(prev => !prev);
-                  setShowDegenView(false);
-                  setShowDegenAnimated(false);
-
-                  // Auto-start simulation if opening and not running
-                  if (isOpening && !degenerateTownService.isRunning) {
-                    await degenerateTownService.start();
-                    addOutput({
-                      type: "info",
-                      content: "🎮 Opening Degenerate Town PixiJS visualization...\n\n⚡ Simulation auto-started!\nEnhanced graphics with particle effects!"
-                    });
-                  } else {
-                    addOutput({
-                      type: "info",
-                      content: isOpening
-                        ? "🎮 Opening Degenerate Town PixiJS visualization...\n\n⚡ Enhanced graphics with particle effects!"
-                        : "🎮 Closing PixiJS simulation..."
-                    });
-                  }
-                  showToast(isOpening ? "PixiJS view opened" : "PixiJS closed", "success");
-                  break;
-                }
-
-                case "animated":
-                case "full": {
-                  const isOpening = !showDegenAnimated;
-                  setShowDegenAnimated(prev => !prev);
-                  setShowDegenView(false);
-                  setShowDegenPixi(false);
-
-                  // Auto-start simulation if opening and not running
-                  if (isOpening && !degenerateTownService.isRunning) {
-                    await degenerateTownService.start();
-                    addOutput({
-                      type: "info",
-                      content: `🎮 Opening Degenerate Town FULL visualization...
-
-⚡ Simulation auto-started!
+⚔️ Simulation auto-started!
 
 FEATURES:
-• CraftPix spritesheet animation support
-• Character walk cycles and actions
-• Particle systems for trading effects
-• Dynamic lighting and glow
-• Screen shake and flash effects
-• Parallax backgrounds
+• Interactive town zones (Asgard, Valhalla, Market Square, Bifrost, Helheim)
+• Click any Norse god to view Q-table and detailed stats
+• Particle effects for trades and market events
+• Ragnarok screen shake and fire effects
+• Real-time leaderboard and market HUD
+• Performance-based agent positioning
+• Twinkling stars and floating runes
+• Odin's Hall and Thor's Forge buildings
 
-💡 Add custom sprites to public/assets/sprites/
-   Run: node scripts/setupCraftPixAssets.js for setup guide`
+💡 Click any agent to see their strategy, PnL, and Q-table!`
                     });
                   } else {
                     addOutput({
                       type: "info",
                       content: isOpening
-                        ? `🎮 Opening Degenerate Town FULL visualization...
+                        ? `🎮 Opening Degenerate Town Ultimate Visualization...
 
-⚡ FEATURES:
-• CraftPix spritesheet animation support
-• Character walk cycles and actions
-• Particle systems for trading effects
-• Dynamic lighting and glow
-• Screen shake and flash effects
-• Parallax backgrounds
+⚔️ FEATURES:
+• Interactive town zones (Asgard, Valhalla, Market Square, Bifrost, Helheim)
+• Click any Norse god to view Q-table and stats
+• Particle effects and Ragnarok screen shake
+• Real-time leaderboard and market HUD
 
-💡 Add custom sprites to public/assets/sprites/
-   Run: node scripts/setupCraftPixAssets.js for setup guide`
-                        : "🎮 Closing animated simulation..."
+💡 Click any agent to see their stats!`
+                        : "🎮 Closing Degenerate Town..."
                     });
                   }
-                  showToast(isOpening ? "Full animation opened" : "Animated closed", "success");
+                  showToast(isOpening ? "Degenerate Town opened" : "Degenerate Town closed", "success");
                   break;
                 }
 
@@ -6985,6 +7111,464 @@ FEATURES:
               }
             } catch (error) {
               handleCommandError(error, `degen ${subCommand}`, addOutput);
+            }
+            break;
+          }
+
+          case "rloop": {
+            const subCommand = args[0]?.toLowerCase();
+
+            if (!subCommand) {
+              const status = await rloopService.getStatus();
+              addOutput({
+                type: "info",
+                content: `🔄 R-LOOP AUTONOMOUS AGENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Claude-powered autonomous task execution loop.
+Iteratively completes tasks using AI reasoning.
+
+Status: ${status.running ? '🟢 Running' : '🔴 Stopped'}
+State: ${status.state || 'idle'}
+Progress: ${status.completed || 0}/${status.total || 0} tasks
+
+Commands:
+• rloop start "task1" "task2" ... - Start with tasks
+• rloop stop                      - Stop running agent
+• rloop status                    - Show current status
+• rloop output [limit]            - Show output log
+• rloop progress                  - Show detailed progress
+• rloop reset                     - Reset all state
+
+Options (with start):
+• --max=N        - Max iterations (default: 10)
+• --model=NAME   - Claude model to use
+
+Example:
+  rloop start "Write unit tests" "Fix linting errors"`
+              });
+              break;
+            }
+
+            try {
+              switch (subCommand) {
+                case "start": {
+                  // Parse tasks from args (everything that's not an option)
+                  const tasks = [];
+                  let maxIterations = 10;
+                  let model = 'claude-sonnet-4-20250514';
+
+                  for (const arg of args.slice(1)) {
+                    if (arg.startsWith('--max=')) {
+                      maxIterations = parseInt(arg.split('=')[1]) || 10;
+                    } else if (arg.startsWith('--model=')) {
+                      model = arg.split('=')[1];
+                    } else {
+                      // Remove quotes if present
+                      tasks.push(arg.replace(/^["']|["']$/g, ''));
+                    }
+                  }
+
+                  if (tasks.length === 0) {
+                    addOutput({
+                      type: "error",
+                      content: `❌ At least one task is required.\n\nUsage: rloop start "task description" ["task2" ...]`
+                    });
+                    break;
+                  }
+
+                  addOutput({
+                    type: "info",
+                    content: `🔄 Starting R-Loop agent with ${tasks.length} task(s)...`
+                  });
+
+                  const result = await rloopService.start(tasks, { maxIterations, model });
+
+                  let output = `✅ R-LOOP AGENT STARTED\n\n`;
+                  output += `📋 Tasks:\n`;
+                  tasks.forEach((task, i) => {
+                    output += `  ${i + 1}. ${task}\n`;
+                  });
+                  output += `\n⚙️ Settings:\n`;
+                  output += `  Max Iterations: ${maxIterations}\n`;
+                  output += `  Model: ${model}\n`;
+                  output += `\n💡 Use 'rloop status' to monitor progress.`;
+
+                  addOutput({
+                    type: "success",
+                    content: output
+                  });
+                  showToast("R-Loop agent started!", "success");
+
+                  // Set up event listeners for live updates
+                  rloopService.on('status', (status) => {
+                    if (status.currentTask) {
+                      addOutput({
+                        type: 'info',
+                        content: `🔄 [R-Loop] Working on: ${status.currentTask.substring(0, 60)}...`
+                      });
+                    }
+                  });
+
+                  rloopService.on('completed', (status) => {
+                    addOutput({
+                      type: 'success',
+                      content: `✅ R-Loop completed! ${status.completed}/${status.total} tasks done.`
+                    });
+                    showToast("R-Loop completed!", "success");
+                  });
+
+                  rloopService.on('error', ({ error }) => {
+                    addOutput({
+                      type: 'error',
+                      content: `❌ R-Loop error: ${error}`
+                    });
+                  });
+                  break;
+                }
+
+                case "stop": {
+                  addOutput({
+                    type: "info",
+                    content: "🛑 Stopping R-Loop agent..."
+                  });
+
+                  const result = await rloopService.stop();
+
+                  addOutput({
+                    type: "success",
+                    content: `✅ R-Loop agent stopped.\n\n${result.message || 'Agent terminated.'}`
+                  });
+                  showToast("R-Loop stopped", "success");
+
+                  // Remove event listeners
+                  rloopService.removeAllListeners('status');
+                  rloopService.removeAllListeners('completed');
+                  rloopService.removeAllListeners('error');
+                  break;
+                }
+
+                case "status": {
+                  const status = await rloopService.getStatus();
+
+                  let output = `🔄 R-LOOP STATUS\n`;
+                  output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                  output += rloopService.formatStatus(status);
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "output": {
+                  const limit = parseInt(args[1]) || 50;
+                  const result = await rloopService.getOutput(limit);
+
+                  if (!result.output || result.output.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "📝 No output yet. Start the R-Loop agent first."
+                    });
+                    break;
+                  }
+
+                  let output = `📝 R-LOOP OUTPUT (last ${limit})\n`;
+                  output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                  output += result.output.slice(-limit).join('\n');
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "progress": {
+                  const progress = await rloopService.getProgress();
+
+                  if (!progress.tasks || progress.tasks.length === 0) {
+                    addOutput({
+                      type: "info",
+                      content: "📊 No progress data. Start the R-Loop agent first."
+                    });
+                    break;
+                  }
+
+                  let output = `📊 R-LOOP PROGRESS\n`;
+                  output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+                  output += `Tasks:\n`;
+                  progress.tasks.forEach((task, i) => {
+                    const icon = task.completed ? '✅' : (task.inProgress ? '🔄' : '⬜');
+                    output += `${icon} ${i + 1}. ${task.text}\n`;
+                    if (task.result) {
+                      output += `   └─ ${task.result.substring(0, 80)}...\n`;
+                    }
+                  });
+
+                  addOutput({
+                    type: "info",
+                    content: output
+                  });
+                  break;
+                }
+
+                case "reset": {
+                  addOutput({
+                    type: "info",
+                    content: "🔄 Resetting R-Loop state..."
+                  });
+
+                  const result = await rloopService.reset();
+
+                  addOutput({
+                    type: "success",
+                    content: `✅ R-Loop state reset.\n\nAll progress and output cleared.`
+                  });
+                  showToast("R-Loop reset", "success");
+                  break;
+                }
+
+                default:
+                  addOutput({
+                    type: "error",
+                    content: `Unknown rloop command: ${subCommand}\n\nUse 'rloop' to see available commands`
+                  });
+              }
+            } catch (error) {
+              handleCommandError(error, `rloop ${subCommand}`, addOutput);
+            }
+            break;
+          }
+
+          // ==================== WELCOME & ONBOARDING ====================
+          case "welcome":
+          case "start":
+          case "onboarding":
+          case "tutorial": {
+            const openRouterConfigured = !!API_CONFIG.openRouter.apiKey;
+            const cmcConfigured = !!API_CONFIG.coinMarketCap.apiKey;
+            const anyApiConfigured = openRouterConfigured || cmcConfigured;
+
+            let welcomeContent = `
+┌─────────────────────────────────────────────────────────────────┐
+│  ᚠ WELCOME TO FENRIR'S GRIMOIRE - AI Trading Terminal          │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                                 │
+│  Your intelligent command center for crypto analysis,           │
+│  ML predictions, and autonomous trading.                        │
+└─────────────────────────────────────────────────────────────────┘
+
+`;
+
+            if (!anyApiConfigured) {
+              welcomeContent += `
+⚠️  SETUP REQUIRED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+No API keys detected. Run 'apikeys' to configure your keys.
+
+FREE FEATURES (No API key needed):
+  • Machine Learning predictions
+  • Pattern recognition
+  • Degenerate Town simulation
+  • Alert system
+
+`;
+            } else {
+              welcomeContent += `
+✅ API STATUS: ${openRouterConfigured ? 'AI Ready' : ''} ${cmcConfigured ? '| Market Data Ready' : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+`;
+            }
+
+            welcomeContent += `
+🚀 QUICK START COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  MARKET DATA          │  AI ANALYSIS          │  TRADING
+  ─────────────────────┼───────────────────────┼──────────────────
+  price BTC            │  analyze SOL          │  fenrir start
+  market ETH           │  predict BTC 7        │  scan start
+  trending             │  sentiment BTC        │  degen open
+  fear                 │  patterns ETH         │  scout discover
+
+  RESEARCH             │  TOOLS                │  SYSTEM
+  ─────────────────────┼───────────────────────┼──────────────────
+  research bitcoin     │  dashboard BTC        │  apikeys
+  websearch-ai ETF     │  alert price BTC > 50k│  status
+  scrape <url>         │  web3 connect         │  theme
+                       │                       │  help
+
+⌨️  KEYBOARD SHORTCUTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ↑ / ↓    Navigate command history
+  Tab      Autocomplete commands
+  Ctrl+L   Clear terminal
+  Escape   Close modals
+
+💡 TIP: Type 'help' for full command list, or 'help <category>' for specific commands
+   Categories: market, ai, ml, trading, research, alerts, system
+`;
+
+            addOutput({
+              type: "welcome",
+              content: welcomeContent,
+            });
+            break;
+          }
+
+          // ==================== QUICK HELP BY CATEGORY ====================
+          case "quickhelp":
+          case "?": {
+            const category = args[0]?.toLowerCase();
+
+            const helpCategories = {
+              market: `
+ᚠ MARKET COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  price [symbol]       Get real-time price (e.g., price BTC)
+  market [symbol]      Detailed market data with volume, supply
+  global               Global crypto market overview
+  trending             Top trending cryptocurrencies
+  movers               Top gainers and losers (24h)
+  fear                 Fear & Greed Index
+
+  CMC PREMIUM:
+  cmc price [symbol]   Detailed CMC price data
+  cmc top [n]          Top N cryptocurrencies
+  cmc trending         CMC trending coins
+  cmc gainers          Top gainers/losers
+  cmc convert          Currency conversion
+`,
+              ai: `
+ᚠ AI COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ask [question]       Data-driven AI analysis
+  talk [message]       Conversational AI (remembers context)
+  analyze [symbol]     Deep market analysis with predictions
+  forget               Clear conversation memory
+  models               List available AI models
+  model [name]         Switch AI model
+`,
+              ml: `
+ᚠ MACHINE LEARNING COMMANDS (No API key required!)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  predict [symbol] [days]     LSTM price prediction
+  predict [symbol] trend      Trend direction prediction
+  sentiment [symbol]          Multi-factor sentiment analysis
+  sentiment-multi [symbol]    Aggregate from multiple sources
+  anomaly [symbol]            Detect unusual activity
+  patterns [symbol]           Chart pattern recognition
+  dashboard [symbol]          Interactive visualization
+`,
+              trading: `
+⚔️ TRADING COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  FENRIR BOT:
+  fenrir start [mode]  Start bot (simulation/conservative/aggressive)
+  fenrir stop          Stop trading bot
+  fenrir status        Portfolio and bot status
+  fenrir positions     View open positions
+
+  LIVE SCANNER:
+  scan start [mode]    Start pump.fun/bonk.fun scanner
+  scan stop            Stop scanner
+  scan status          Scanner status
+
+  AI TRADER:
+  ai start             Start autonomous AI trader
+  ai stop              Stop and save learning
+  ai performance       View AI performance
+`,
+              research: `
+ᛉ RESEARCH COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  websearch-ai [query]  AI web search with citations
+  research [topic]      Deep research with Parallel AI
+  google [query]        Google search results
+  scrape [url]          Extract content from any URL
+  docs [query]          Search technical documentation
+
+  SCOUT (Token Discovery):
+  scout discover        Find 100x candidates
+  scout evaluate [sym]  Deep 50-point evaluation
+  scout report [sym]    Due diligence checklist
+`,
+              alerts: `
+ᛒ ALERT COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  alert price [sym] [>/<] [val]  Price threshold alert
+  alert pattern [sym] [pattern]  Pattern detection alert
+  alert sentiment [sym] [sent]   Sentiment change alert
+  alert anomaly [sym]            Anomaly detection alert
+  alert list                     View all alerts
+  alert remove [id]              Remove specific alert
+  alert clear                    Clear all alerts
+`,
+              system: `
+ᛗ SYSTEM COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  apikeys              Configure API keys
+  status               Check API status
+  theme                Change appearance
+  clear                Clear terminal
+  help                 Full command list
+  welcome              Show this onboarding screen
+
+  WALLET:
+  web3 connect         Connect Phantom/Solflare (recommended)
+  web3 disconnect      Disconnect wallet
+  web3 balance         Check balance
+`,
+              degen: `
+🏛️ DEGENERATE TOWN COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  degen start          Start Q-Learning simulation
+  degen stop           Stop simulation
+  degen open           Open visual simulation (interactive!)
+  degen status         View realm statistics
+  degen agents         List all Norse god agents
+  degen agent [name]   View specific agent details
+  degen leaderboard    Show agent rankings
+  degen trades [n]     View recent trades
+  degen events [n]     View market events
+  degen speed [1-10]   Adjust simulation speed
+  degen reset          Reset all learning data
+`,
+            };
+
+            if (category && helpCategories[category]) {
+              addOutput({
+                type: "help",
+                content: helpCategories[category],
+              });
+            } else {
+              addOutput({
+                type: "help",
+                content: `
+ᚠ QUICK HELP - Command Categories
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Type '? [category]' or 'quickhelp [category]' for detailed help:
+
+  ? market     - Price data, trending, fear index
+  ? ai         - AI analysis, conversations, models
+  ? ml         - Machine learning predictions (FREE!)
+  ? trading    - Fenrir bot, scanner, AI trader
+  ? research   - Web search, scraping, documentation
+  ? alerts     - Price, pattern, sentiment alerts
+  ? degen      - Degenerate Town simulation
+  ? system     - API keys, themes, wallet
+
+Examples:
+  ? market     - Show all market commands
+  ? trading    - Show all trading commands
+
+Or type 'help' for the complete command reference.
+`,
+              });
             }
             break;
           }
@@ -7637,103 +8221,29 @@ Type "help" for commands`,
         coinId={dashboardCoinId}
       />
 
-      {/* Degenerate Town Canvas Visualization */}
-      {showDegenView && (
-        <div style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          zIndex: 1000,
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-          borderRadius: '8px',
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            background: '#1a1a2e',
-            padding: '8px 12px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            borderBottom: '1px solid #333',
-          }}>
-            <span style={{ color: '#ffd700', fontFamily: 'monospace', fontSize: '12px' }}>
-              DEGENERATE TOWN (Canvas)
-            </span>
-            <button
-              onClick={() => setShowDegenView(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#ff4444',
-                cursor: 'pointer',
-                fontSize: '16px',
-              }}
-            >
-              ×
-            </button>
-          </div>
-          <DegenerateTownView compact={true} />
-        </div>
-      )}
-
-      {/* Degenerate Town PixiJS Visualization (Enhanced) */}
-      {showDegenPixi && (
+      {/* Degenerate Town Ultimate Visualization */}
+      {showDegenTown && (
         <div style={{
           position: 'fixed',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
           zIndex: 1001,
-          boxShadow: '0 8px 40px rgba(0, 255, 65, 0.3)',
-          borderRadius: '10px',
-          overflow: 'hidden',
-        }}>
-          <DegenerateTownPixi
-            compact={false}
-            onClose={() => setShowDegenPixi(false)}
-          />
-        </div>
-      )}
-
-      {/* Backdrop for PixiJS modal */}
-      {showDegenPixi && (
-        <div
-          onClick={() => setShowDegenPixi(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            zIndex: 1000,
-          }}
-        />
-      )}
-
-      {/* Degenerate Town FULL Animated Visualization */}
-      {showDegenAnimated && (
-        <div style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 1001,
-          boxShadow: '0 10px 50px rgba(0, 255, 65, 0.4)',
+          boxShadow: '0 10px 60px rgba(0, 255, 65, 0.4)',
           borderRadius: '12px',
           overflow: 'hidden',
         }}>
-          <DegenerateTownAnimated
+          <DegenerateTownUltimate
             compact={false}
-            onClose={() => setShowDegenAnimated(false)}
+            onClose={() => setShowDegenTown(false)}
           />
         </div>
       )}
 
-      {/* Backdrop for Animated modal */}
-      {showDegenAnimated && (
+      {/* Backdrop for Degenerate Town modal */}
+      {showDegenTown && (
         <div
-          onClick={() => setShowDegenAnimated(false)}
+          onClick={() => setShowDegenTown(false)}
           style={{
             position: 'fixed',
             top: 0,
