@@ -30,6 +30,8 @@ export function useDegenTownCommands({
   showToast,
   showDegenTown,
   setShowDegenTown,
+  showDegenerateRealms,
+  setShowDegenerateRealms,
 }) {
   const handleStart = useCallback(async () => {
     addOutput({
@@ -310,6 +312,50 @@ export function useDegenTownCommands({
     showToast('Agent learning reset', 'success');
   }, [addOutput, showToast]);
 
+  const handleOpenRealms = useCallback(() => {
+    if (setShowDegenerateRealms) {
+      setShowDegenerateRealms(true);
+      addOutput({
+        type: 'info',
+        content: `🎮 DEGENERATE REALMS - Norse Trading RPG
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A Terraria-style sandbox game with AI trading!
+
+CONTROLS:
+• A/D or Arrow Keys: Move
+• W/Space: Jump
+• Left Click: Mine block
+• Right Click: Place block
+• 1-4: Select block type
+• T: Open trading terminal
+• E: Talk to NPC
+• ESC: Close menus
+
+REALMS:
+⚡ Asgard - Golden floating islands (top)
+🌍 Midgard - Surface world (middle)
+🔥 Helheim - Deep underground (bottom)
+
+CRYPTO ORES:
+💜 SOL Ore: 0.1 SOL
+💙 ETH Ore: 0.05 SOL
+🟠 BTC Ore: 0.2 SOL (rare)
+💚 DEGEN Ore: 0.01 SOL
+🌈 Rainbow Crystal: 1.0 SOL (Asgard only)
+🧊 Frozen Soul: 0.5 SOL (Helheim only)
+
+Mine resources, talk to Norse gods, and trade!`,
+      });
+      showToast('Degenerate Realms opened!', 'success');
+    } else {
+      addOutput({
+        type: 'warning',
+        content: 'Degenerate Realms not available. Component not initialized.',
+      });
+    }
+  }, [addOutput, showToast, setShowDegenerateRealms]);
+
   const handleOpenView = useCallback(async () => {
     const isOpening = !showDegenTown;
     setShowDegenTown(prev => !prev);
@@ -381,6 +427,7 @@ Commands:
 • degen speed <ms> - Set simulation speed (100-5000ms)
 • degen reset - Reset all agent learning
 • degen open - Open the visual simulation window
+• degen realms - Open DEGENERATE REALMS (Full RPG mode!)
 
 Norse Runes:
 ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NORSE_RUNES.profit} Profit  ${NORSE_RUNES.loss} Loss`,
@@ -434,6 +481,11 @@ ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NO
         case 'view':
           await handleOpenView();
           break;
+        case 'realms':
+        case 'rpg':
+        case 'game':
+          handleOpenRealms();
+          break;
         default:
           addOutput({
             type: 'error',
@@ -459,6 +511,7 @@ ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NO
     handleSpeed,
     handleReset,
     handleOpenView,
+    handleOpenRealms,
   ]);
 
   return {

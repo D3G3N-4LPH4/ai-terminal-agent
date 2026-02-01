@@ -89,7 +89,7 @@ import {
 } from "./ml";
 
 // Import components
-import { Toast, APIKeyModal, OutputItem, Dashboard } from "./components";
+import { Toast, APIKeyModal, OutputItem, Dashboard, DegenerateRealms } from "./components";
 import ThemeToggle from "./components/ThemeDropdown";
 import DegenerateTownUltimate from "./components/DegenerateTownUltimate";
 
@@ -456,6 +456,7 @@ export default function AITerminalAgent() {
   const [dashboardSymbol, setDashboardSymbol] = useState('BTC');
   const [dashboardCoinId, setDashboardCoinId] = useState('bitcoin');
   const [showDegenTown, setShowDegenTown] = useState(false);
+  const [showDegenerateRealms, setShowDegenerateRealms] = useState(false);
   const [conversationHistory, setConversationHistory] = useState(() => {
     // Load conversation history from localStorage on init
     try {
@@ -1290,12 +1291,14 @@ Category requested: ${toolArgs.category || 'none'}`,
     COIN_SYMBOL_MAP,
   });
 
-  // Degenerate Town commands: degen start/stop/status/open etc.
+  // Degenerate Town commands: degen start/stop/status/open/realms etc.
   const { handleCommand: handleDegenCommand } = useDegenTownCommands({
     addOutput,
     showToast,
     showDegenTown,
     setShowDegenTown,
+    showDegenerateRealms,
+    setShowDegenerateRealms,
   });
 
   // System commands: help, welcome, quickhelp, apikeys, status, clear, models
@@ -8265,6 +8268,11 @@ Type "help" for commands`,
             zIndex: 1000,
           }}
         />
+      )}
+
+      {/* Degenerate Realms - Full RPG Mode */}
+      {showDegenerateRealms && (
+        <DegenerateRealms onClose={() => setShowDegenerateRealms(false)} />
       )}
     </div>
   );
