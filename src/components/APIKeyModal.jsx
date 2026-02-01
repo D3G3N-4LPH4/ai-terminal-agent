@@ -61,6 +61,7 @@ const APIKeyModal = React.memo(({ isOpen, onClose, theme, onSave }) => {
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white text-2xl"
+            aria-label="Close API keys modal"
           >
             ✕
           </button>

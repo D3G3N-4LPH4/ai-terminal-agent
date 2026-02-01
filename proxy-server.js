@@ -11,6 +11,7 @@ import { FenrirAgent } from './fenrirAgent.js';
 import { createClient } from 'redis';
 import { spawn } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
@@ -1555,6 +1556,256 @@ app.post('/api/scraper-cache/flush', async (req, res) => {
   } catch (error) {
     console.error('Scraper cache flush error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== R-LOOP AUTONOMOUS AGENT ====================
+
+// R-Loop state
+let rloopProcess = null;
+let rloopOutput = [];
+const RLOOP_SCRIPT_PATH = path.join(__dirname, 'scripts', 'rloop.py');
+const RLOOP_DATA_DIR = path.join(__dirname, 'scripts', 'rloop_data');
+
+// Ensure R-Loop data directory exists
+if (!fs.existsSync(RLOOP_DATA_DIR)) {
+  fs.mkdirSync(RLOOP_DATA_DIR, { recursive: true });
+}
+
+/**
+ * Start R-Loop autonomous agent
+ * POST /api/rloop/start
+ * Body: { tasks: ["task1", "task2"], maxIterations: 10, model: "claude-sonnet-4-20250514" }
+ */
+app.post('/api/rloop/start', async (req, res) => {
+  if (rloopProcess && !rloopProcess.killed) {
+    return res.status(400).json({
+      success: false,
+      error: 'R-Loop is already running. Stop it first or check status.'
+    });
+  }
+
+  const { tasks, maxIterations = 10, model = 'claude-sonnet-4-20250514' } = req.body;
+
+  if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Tasks array is required'
+    });
+  }
+
+  // Check for Anthropic API key
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(400).json({
+      success: false,
+      error: 'ANTHROPIC_API_KEY environment variable not set'
+    });
+  }
+
+  try {
+    // Clear previous output
+    rloopOutput = [];
+
+    // Build arguments
+    const args = [
+      RLOOP_SCRIPT_PATH,
+      '--tasks', ...tasks,
+      '--max-iterations', maxIterations.toString(),
+      '--model', model
+    ];
+
+    console.log(`[R-Loop] Starting with ${tasks.length} tasks...`);
+
+    // Spawn Python process
+    rloopProcess = spawn('python', args, {
+      env: { ...process.env },
+      cwd: __dirname
+    });
+
+    rloopProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      console.log(`[R-Loop] ${output}`);
+      rloopOutput.push({ type: 'stdout', text: output, timestamp: new Date().toISOString() });
+      // Keep only last 100 entries
+      if (rloopOutput.length > 100) rloopOutput.shift();
+    });
+
+    rloopProcess.stderr.on('data', (data) => {
+      const output = data.toString();
+      console.error(`[R-Loop Error] ${output}`);
+      rloopOutput.push({ type: 'stderr', text: output, timestamp: new Date().toISOString() });
+    });
+
+    rloopProcess.on('close', (code) => {
+      console.log(`[R-Loop] Process exited with code ${code}`);
+      rloopOutput.push({ type: 'system', text: `Process exited with code ${code}`, timestamp: new Date().toISOString() });
+      rloopProcess = null;
+    });
+
+    rloopProcess.on('error', (error) => {
+      console.error(`[R-Loop] Process error:`, error);
+      rloopOutput.push({ type: 'error', text: error.message, timestamp: new Date().toISOString() });
+    });
+
+    res.json({
+      success: true,
+      message: `R-Loop started with ${tasks.length} tasks`,
+      pid: rloopProcess.pid,
+      tasks
+    });
+
+  } catch (error) {
+    console.error('[R-Loop] Start error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Stop R-Loop agent
+ * POST /api/rloop/stop
+ */
+app.post('/api/rloop/stop', (req, res) => {
+  if (!rloopProcess || rloopProcess.killed) {
+    return res.json({
+      success: true,
+      message: 'R-Loop is not running'
+    });
+  }
+
+  try {
+    rloopProcess.kill('SIGTERM');
+    rloopOutput.push({ type: 'system', text: 'Process stopped by user', timestamp: new Date().toISOString() });
+
+    res.json({
+      success: true,
+      message: 'R-Loop stopped'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Get R-Loop status
+ * GET /api/rloop/status
+ */
+app.get('/api/rloop/status', (req, res) => {
+  const statusFile = path.join(RLOOP_DATA_DIR, 'status.json');
+  const tasksFile = path.join(RLOOP_DATA_DIR, 'tasks.json');
+
+  let status = { state: 'not_initialized', completed: 0, total: 0 };
+  let tasks = { goals: [], completed: [] };
+
+  try {
+    if (fs.existsSync(statusFile)) {
+      status = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+    }
+    if (fs.existsSync(tasksFile)) {
+      tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf8'));
+    }
+  } catch (error) {
+    console.error('[R-Loop] Status read error:', error);
+  }
+
+  res.json({
+    running: rloopProcess !== null && !rloopProcess.killed,
+    pid: rloopProcess?.pid || null,
+    state: status.state,
+    completed: status.completed,
+    total: status.total,
+    currentTask: status.current_task || null,
+    error: status.error || null,
+    tasks: tasks.goals.map((goal, i) => ({
+      text: goal,
+      completed: tasks.completed[i] || false
+    })),
+    updatedAt: status.updated_at || null
+  });
+});
+
+/**
+ * Get R-Loop output log
+ * GET /api/rloop/output
+ */
+app.get('/api/rloop/output', (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+
+  res.json({
+    output: rloopOutput.slice(-limit),
+    total: rloopOutput.length,
+    running: rloopProcess !== null && !rloopProcess.killed
+  });
+});
+
+/**
+ * Get R-Loop progress log
+ * GET /api/rloop/progress
+ */
+app.get('/api/rloop/progress', (req, res) => {
+  const progressFile = path.join(RLOOP_DATA_DIR, 'progress.txt');
+
+  try {
+    if (fs.existsSync(progressFile)) {
+      const content = fs.readFileSync(progressFile, 'utf8');
+      // Return last 5000 chars to avoid huge responses
+      const trimmed = content.length > 5000 ? '...' + content.slice(-5000) : content;
+      res.json({
+        success: true,
+        progress: trimmed,
+        length: content.length
+      });
+    } else {
+      res.json({
+        success: true,
+        progress: '',
+        length: 0
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Reset R-Loop state
+ * POST /api/rloop/reset
+ */
+app.post('/api/rloop/reset', (req, res) => {
+  if (rloopProcess && !rloopProcess.killed) {
+    rloopProcess.kill('SIGTERM');
+    rloopProcess = null;
+  }
+
+  try {
+    // Clear data files
+    const files = ['status.json', 'tasks.json', 'progress.txt'];
+    for (const file of files) {
+      const filePath = path.join(RLOOP_DATA_DIR, file);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    rloopOutput = [];
+
+    res.json({
+      success: true,
+      message: 'R-Loop state reset'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 

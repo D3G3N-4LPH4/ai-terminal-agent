@@ -3,9 +3,11 @@ import { Check, AlertCircle, Info, X } from "lucide-react";
 
 const Toast = React.memo(({ message, type, onClose }) => {
   useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
+    // Longer timeout for errors so users can read them
+    const timeout = type === 'error' ? 8000 : type === 'warning' ? 5000 : 3000;
+    const timer = setTimeout(onClose, timeout);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [onClose, type]);
 
   const icons = {
     success: <Check size={20} />,
@@ -27,7 +29,7 @@ const Toast = React.memo(({ message, type, onClose }) => {
     >
       {icons[type]}
       <span className="font-medium">{message}</span>
-      <button onClick={onClose} className="ml-2 hover:opacity-70">
+      <button onClick={onClose} className="ml-2 hover:opacity-70" aria-label="Dismiss notification">
         <X size={16} />
       </button>
     </div>
