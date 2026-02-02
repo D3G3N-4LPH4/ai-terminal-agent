@@ -56,6 +56,7 @@ export const BLOCK_TYPES = {
   GRASS: { id: 1, name: 'Grass', color: 0x228b22, solid: true, hardness: 1 },
   DIRT: { id: 2, name: 'Dirt', color: 0x654321, solid: true, hardness: 1 },
   STONE: { id: 3, name: 'Stone', color: 0x696969, solid: true, hardness: 2 },
+  WOOD: { id: 16, name: 'Wood', color: 0xa0522d, solid: true, hardness: 1 },
 
   // Asgard blocks
   GOLD_BRICK: { id: 4, name: 'Gold Brick', color: 0xdaa520, solid: true, hardness: 3 },
@@ -74,9 +75,94 @@ export const BLOCK_TYPES = {
   DEGEN_ORE: { id: 13, name: 'Degen Ore', color: 0x00ff80, solid: true, hardness: 2, ore: true, value: 0.01, symbol: 'DEGEN' },
 };
 
-// Get block by ID
+// ==================== ENEMY TYPES ====================
+
+export const ENEMY_TYPES = {
+  BERSERKER: {
+    id: 'berserker',
+    name: 'Berserker',
+    color: 0xff0000,
+    width: 16,
+    height: 32,
+    health: 100,
+    damage: 10,
+    speed: 4,
+    jumpForce: 12,
+    chaseRange: 300,
+    hostile: true,
+    drops: { SOL: 0.05 },
+  },
+  TROLL: {
+    id: 'troll',
+    name: 'Cave Troll',
+    color: 0x8b4513,
+    width: 32,
+    height: 48,
+    health: 150,
+    damage: 20,
+    speed: 2,
+    jumpForce: 10,
+    chaseRange: 200,
+    hostile: true,
+    drops: { SOL: 0.15, DEGEN: 50 },
+  },
+  DRAUGR: {
+    id: 'draugr',
+    name: 'Draugr',
+    color: 0xa9a9a9,
+    width: 16,
+    height: 32,
+    health: 80,
+    damage: 15,
+    speed: 5,
+    jumpForce: 14,
+    chaseRange: 350,
+    hostile: true,
+    drops: { ETH: 0.02 },
+  },
+  JOTUNN: {
+    id: 'jotunn',
+    name: 'Frost Giant',
+    color: 0x00008b,
+    width: 48,
+    height: 64,
+    health: 200,
+    damage: 30,
+    speed: 1.5,
+    jumpForce: 8,
+    chaseRange: 250,
+    hostile: true,
+    drops: { BTC: 0.01, SOL: 0.3 },
+  },
+  VILLAGER: {
+    id: 'villager',
+    name: 'Viking Villager',
+    color: 0x00ff00,
+    width: 16,
+    height: 32,
+    health: 50,
+    damage: 0,
+    speed: 2,
+    jumpForce: 10,
+    chaseRange: 0,
+    hostile: false,
+    dialogues: [
+      "Hail, traveler! The markets are volatile today.",
+      "By Odin's beard, have you seen the SOL charts?",
+      "Trade wisely, friend. Ragnarök comes for the unprepared.",
+    ],
+  },
+};
+
+// Block ID lookup table (O(1) instead of O(n))
+const BLOCK_ID_LOOKUP = Object.values(BLOCK_TYPES).reduce((acc, block) => {
+  acc[block.id] = block;
+  return acc;
+}, {});
+
+// Get block by ID (O(1) lookup)
 export const getBlockById = (id) => {
-  return Object.values(BLOCK_TYPES).find(b => b.id === id) || BLOCK_TYPES.AIR;
+  return BLOCK_ID_LOOKUP[id] || BLOCK_TYPES.AIR;
 };
 
 // ==================== WORLD GENERATION CONFIG ====================
@@ -123,10 +209,15 @@ export const PLAYER_CONFIG = {
   jumpForce: 12,
   gravity: 0.5,
   friction: 0.85,
+  maxHealth: 100,
+  attackDamage: 10,
+  attackRange: 40,
+  invincibilityTime: 1000, // ms of invincibility after being hit
 
   startingInventory: {
     DIRT: 50,
     STONE: 20,
+    WOOD: 50,
   },
 
   startingWallet: {
@@ -135,6 +226,17 @@ export const PLAYER_CONFIG = {
     BTC: 0,
     DEGEN: 0,
   },
+};
+
+// ==================== VIKING HALL CONFIG ====================
+
+export const VIKING_HALL_CONFIG = {
+  width: 20,
+  height: 5,
+  doorHeight: 2,
+  roofHeight: 3,
+  spawnAtPlayerStart: true,
+  friendlyVillagerCount: 3,
 };
 
 // ==================== NPC SPAWN LOCATIONS ====================
@@ -209,8 +311,10 @@ export const KEYBINDINGS = {
 export default {
   REALM_BIOMES,
   BLOCK_TYPES,
+  ENEMY_TYPES,
   WORLD_CONFIG,
   PLAYER_CONFIG,
+  VIKING_HALL_CONFIG,
   NPC_SPAWN_ZONES,
   MARKET_CONFIG,
   UI_CONFIG,
