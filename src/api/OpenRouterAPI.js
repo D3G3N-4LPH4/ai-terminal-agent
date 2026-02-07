@@ -5,6 +5,7 @@
 import { fetchWithTimeout, fetchWithRetry } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
 import { validateChatMessages, validateAIOptions, validateApiKey } from '../utils/validation.js';
+import rateLimiter from '../utils/RateLimiter.js';
 
 export class OpenRouterAPI {
   constructor(apiKey, baseUrl, defaultModel) {
@@ -24,6 +25,9 @@ export class OpenRouterAPI {
         ErrorType.API_KEY_MISSING
       );
     }
+
+    // Rate limit check
+    await rateLimiter.wait('openrouter');
 
     try {
       // Validate inputs

@@ -6,6 +6,7 @@
 
 import { fetchWithTimeout } from '../utils/fetchWithTimeout.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
+import rateLimiter from '../utils/RateLimiter.js';
 
 export class AnthropicAPI {
   /**
@@ -73,6 +74,9 @@ export class AnthropicAPI {
         ErrorType.API_KEY_MISSING
       );
     }
+
+    // Rate limit check
+    await rateLimiter.wait('anthropic');
 
     try {
       const { messages: anthropicMessages, system } = this.convertMessages(messages);

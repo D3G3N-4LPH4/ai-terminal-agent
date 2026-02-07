@@ -12,6 +12,8 @@ import { useCallback } from 'react';
 import { getCoinIdOrError } from '../utils/coinValidation';
 import { handleCommandError } from '../utils/errorHandler';
 import { getLoadingMessage, OperationType } from '../utils/loadingMessages';
+import memoryService from '../services/MemoryService.js';
+import skillService from '../services/SkillService.js';
 
 const CONVERSATION_STORAGE_KEY = 'fenrir_conversation_history';
 const CONVERSATION_METADATA_KEY = 'fenrir_conversation_metadata';
@@ -84,10 +86,33 @@ Key traits:
 
 You have access to tools for market data. Use them when asked about prices or market conditions.`;
 
+      // Inject persistent memory facts into system prompt
+      const factsSummary = memoryService.getFactsSummary();
+      if (factsSummary) {
+        systemPrompt += `\n\n${factsSummary}`;
+      }
+
+      // Inject matched skill prompts
+      const matchedSkills = skillService.match(userMessage);
+      for (const skill of matchedSkills) {
+        if (skill.mode === 'prompt') {
+          try {
+            const skillPrompt = await skillService.execute(skill, userMessage);
+            systemPrompt += `\n\n[Skill: ${skill.name}]\n${skillPrompt}`;
+          } catch { /* skip failed skills */ }
+        }
+      }
+
+      // Use MemoryService context merged with local conversation history
+      const memoryContext = memoryService.getContext(20);
+      const contextMessages = memoryContext.length > 0
+        ? memoryContext
+        : conversationHistory.slice(-20);
+
       // Build messages with history
       const messages = [
         { role: 'system', content: systemPrompt },
-        ...conversationHistory.slice(-20),
+        ...contextMessages,
         { role: 'user', content: userMessage },
       ];
 
@@ -144,6 +169,10 @@ You have access to tools for market data. Use them when asked about prices or ma
 
       setConversationHistory(newHistory);
       localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(newHistory));
+
+      // Persist to MemoryService
+      memoryService.addMessage('user', userMessage);
+      memoryService.addMessage('assistant', assistantMessage);
 
       // Extract topics from message
       const extractedTopics = [];

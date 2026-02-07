@@ -7,6 +7,8 @@
  */
 
 import { useCallback } from 'react';
+import tradeConfirmationService from '../services/TradeConfirmationService.js';
+import memoryService from '../services/MemoryService.js';
 
 /**
  * Utility function for error handling
@@ -31,6 +33,56 @@ export function useTradingCommands({
   liveTradingEngine,
   WalletUtils,
 }) {
+  // === TRADE CONFIRMATION COMMANDS ===
+
+  const handleTradeConfirm = useCallback((id) => {
+    if (!id) {
+      addOutput({ type: 'error', content: "Usage: trade confirm <id>" });
+      return;
+    }
+    const result = tradeConfirmationService.confirmTrade(id);
+    if (result) {
+      addOutput({ type: 'success', content: `Trade ${id} confirmed! Executing ${result.trade.type?.toUpperCase()} for ${result.trade.amount} SOL...` });
+      memoryService.saveTrade({
+        type: result.trade.type,
+        symbol: result.trade.symbol || result.trade.mint,
+        amount: result.trade.amount,
+        price: result.trade.price,
+        status: 'confirmed',
+      });
+      showToast('Trade confirmed', 'success');
+    } else {
+      addOutput({ type: 'error', content: `Trade ${id} not found, already processed, or countdown not complete.` });
+    }
+  }, [addOutput, showToast]);
+
+  const handleTradeCancel = useCallback((id) => {
+    if (!id) {
+      addOutput({ type: 'error', content: "Usage: trade cancel <id>" });
+      return;
+    }
+    const result = tradeConfirmationService.cancelTrade(id);
+    if (result) {
+      addOutput({ type: 'success', content: `Trade ${id} cancelled.` });
+      showToast('Trade cancelled', 'info');
+    } else {
+      addOutput({ type: 'error', content: `Trade ${id} not found or already processed.` });
+    }
+  }, [addOutput, showToast]);
+
+  const handleTradePending = useCallback(() => {
+    tradeConfirmationService.expireOld();
+    const pending = tradeConfirmationService.getPending();
+    if (pending.length === 0) {
+      addOutput({ type: 'info', content: 'No pending trades.' });
+      return;
+    }
+    let output = `PENDING TRADES (${pending.length})\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    pending.forEach(p => {
+      output += tradeConfirmationService.formatPendingTrade(p);
+    });
+    addOutput({ type: 'info', content: output });
+  }, [addOutput]);
   // === FENRIR COMMANDS ===
 
   const handleFenrirHelp = useCallback(() => {
@@ -796,6 +848,27 @@ export function useTradingCommands({
         }
       }
 
+      if (command === 'trade') {
+        const subCommand = args[0]?.toLowerCase();
+        switch (subCommand) {
+          case 'confirm':
+            handleTradeConfirm(args[1]);
+            return true;
+          case 'cancel':
+            handleTradeCancel(args[1]);
+            return true;
+          case 'pending':
+            handleTradePending();
+            return true;
+          default:
+            addOutput({
+              type: 'info',
+              content: `TRADE CONFIRMATION COMMANDS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n  trade confirm <id>  - Confirm a pending trade\n  trade cancel <id>   - Cancel a pending trade\n  trade pending       - List pending trades`,
+            });
+            return true;
+        }
+      }
+
       if (command === 'scan') {
         const subCommand = args[0]?.toLowerCase();
 
@@ -858,6 +931,9 @@ export function useTradingCommands({
       handleFenrirStatus,
       handleFenrirPositions,
       handleFenrirConfig,
+      handleTradeConfirm,
+      handleTradeCancel,
+      handleTradePending,
       handleScanHelp,
       handleScanStart,
       handleScanStop,
@@ -882,6 +958,10 @@ export function useTradingCommands({
     handleFenrirStatus,
     handleFenrirPositions,
     handleFenrirConfig,
+    // Trade confirmation handlers
+    handleTradeConfirm,
+    handleTradeCancel,
+    handleTradePending,
     // Scan handlers
     handleScanStart,
     handleScanStop,

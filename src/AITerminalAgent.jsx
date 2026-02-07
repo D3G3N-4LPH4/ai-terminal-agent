@@ -102,7 +102,11 @@ import {
   useAICommands,
   useCMCCommands,
   useTradingCommands,
+  useMemoryCommands,
+  useSkillCommands,
 } from "./hooks";
+import memoryService from "./services/MemoryService";
+import skillService from "./services/SkillService";
 
 import {
   LineChart,
@@ -563,6 +567,10 @@ export default function AITerminalAgent() {
       takeProfit: 1.0,
       trailingStop: 0.15
     });
+
+    // Initialize persistent memory and skill services
+    memoryService.init();
+    skillService.init();
 
     // Initialize ML Services
     mlService.current = new MLService();
@@ -1372,6 +1380,16 @@ Category requested: ${toolArgs.category || 'none'}`,
     WalletUtils,
   });
 
+  const { handleCommand: handleMemoryCommand } = useMemoryCommands({
+    addOutput,
+    showToast,
+  });
+
+  const { handleCommand: handleSkillCommand } = useSkillCommands({
+    addOutput,
+    showToast,
+  });
+
   // ==================== COMMAND HANDLERS ====================
 
   const handleCommand = useCallback(
@@ -1396,9 +1414,27 @@ Category requested: ${toolArgs.category || 'none'}`,
           }
         }
 
-        // Trading commands (fenrir, scan)
-        if ((command === 'fenrir' || command === 'scan') && handleTradingCommand) {
+        // Trading commands (fenrir, scan, trade)
+        if ((command === 'fenrir' || command === 'scan' || command === 'trade') && handleTradingCommand) {
           const handled = await handleTradingCommand(command, args);
+          if (handled) {
+            setIsProcessing(false);
+            return;
+          }
+        }
+
+        // Memory commands (memory, limit)
+        if ((command === 'memory' || command === 'limit') && handleMemoryCommand) {
+          const handled = handleMemoryCommand(command, args.join(' '));
+          if (handled) {
+            setIsProcessing(false);
+            return;
+          }
+        }
+
+        // Skill commands
+        if (command === 'skill' && handleSkillCommand) {
+          const handled = await handleSkillCommand(command, args.join(' '));
           if (handled) {
             setIsProcessing(false);
             return;
@@ -1554,6 +1590,31 @@ Category requested: ${toolArgs.category || 'none'}`,
   rloop output [limit]         - Show output log
   rloop progress               - Show detailed progress
   rloop reset                  - Reset all state
+
+🧠 PERSISTENT MEMORY
+  memory show                  - Memory statistics
+  memory facts [category]      - List stored facts
+  memory remember <fact>       - Store a fact
+  memory forget <key>          - Delete a fact
+  memory trades                - Show trade history
+  memory export / import       - Backup/restore memory
+  memory clear [namespace]     - Clear memory data
+  limit set <amount>           - Set daily SOL trading limit
+  limit show                   - Show daily limits and usage
+
+🛡️ TRADE CONFIRMATION
+  trade confirm <id>           - Confirm a pending trade
+  trade cancel <id>            - Cancel a pending trade
+  trade pending                - List pending trades
+
+⚡ SKILL SYSTEM
+  skill list                   - List all skills
+  skill show <name>            - Show skill details
+  skill run <name> [input]     - Execute a skill
+  skill create <name>          - Create a new skill
+  skill delete <name>          - Delete a skill
+  skill enable/disable <name>  - Toggle skill
+  skill export/import          - Share skills
 
 ᛗ SYSTEM RUNES
   apikeys                      - Inscribe your keys
@@ -6743,6 +6804,7 @@ Commands:
 • degen speed <ms> - Set simulation speed (100-5000ms)
 • degen reset - Reset all agent learning
 • degen open - Open the visual simulation window
+• degen realms - Open DEGENERATE REALMS (Full RPG mode!)
 
 Norse Runes:
 ${NORSE_RUNES.buy} Buy  ${NORSE_RUNES.sell} Sell  ${NORSE_RUNES.hold} Hold  ${NORSE_RUNES.profit} Profit  ${NORSE_RUNES.loss} Loss`
@@ -7114,6 +7176,46 @@ FEATURES:
                     });
                   }
                   showToast(isOpening ? "Degenerate Town opened" : "Degenerate Town closed", "success");
+                  break;
+                }
+
+                case "realms":
+                case "rpg":
+                case "game": {
+                  setShowDegenerateRealms(true);
+                  addOutput({
+                    type: "info",
+                    content: `🎮 DEGENERATE REALMS - Norse Trading RPG
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A Terraria-style sandbox game with AI trading!
+
+CONTROLS:
+• A/D or Arrow Keys: Move
+• W/Space: Jump
+• Left Click: Mine block
+• Right Click: Place block
+• 1-4: Select block type
+• T: Open trading terminal
+• E: Talk to NPC
+• ESC: Close menus
+
+REALMS:
+⚡ Asgard - Golden floating islands (top)
+🌍 Midgard - Surface world (middle)
+🔥 Helheim - Deep underground (bottom)
+
+CRYPTO ORES:
+💜 SOL Ore: 0.1 SOL
+💙 ETH Ore: 0.05 SOL
+🟠 BTC Ore: 0.2 SOL (rare)
+💚 DEGEN Ore: 0.01 SOL
+🌈 Rainbow Crystal: 1.0 SOL (Asgard only)
+🧊 Frozen Soul: 0.5 SOL (Helheim only)
+
+Mine resources, talk to Norse gods, and trade!`
+                  });
+                  showToast("Degenerate Realms opened!", "success");
                   break;
                 }
 

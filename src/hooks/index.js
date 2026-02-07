@@ -60,6 +60,8 @@ export { default as useMLCommands } from './useMLCommands';
 export { default as useAICommands } from './useAICommands';
 export { default as useCMCCommands } from './useCMCCommands';
 export { default as useTradingCommands } from './useTradingCommands';
+export { default as useMemoryCommands } from './useMemoryCommands';
+export { default as useSkillCommands } from './useSkillCommands';
 
 /**
  * Future hooks to be extracted:

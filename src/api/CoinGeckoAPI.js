@@ -3,6 +3,7 @@
 import { fetchWithTimeout, fetchJSON } from '../utils/fetchWithTimeout.js';
 import { caches, cachedAPICall } from '../utils/requestCache.js';
 import { validateAPIResponse, createError, ErrorType } from '../utils/errorHandler.js';
+import rateLimiter from '../utils/RateLimiter.js';
 
 export class CoinGeckoAPI {
   constructor(apiKey = "", baseUrl, proBaseUrl) {
@@ -21,6 +22,9 @@ export class CoinGeckoAPI {
   }
 
   async getPrice(coinIds, vsCurrencies = ["usd"]) {
+    // Rate limit check
+    await rateLimiter.wait('coingecko');
+
     const ids = Array.isArray(coinIds) ? coinIds.join(",") : coinIds;
     const currencies = Array.isArray(vsCurrencies)
       ? vsCurrencies.join(",")
